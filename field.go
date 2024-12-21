@@ -325,140 +325,179 @@ func newTypeInfo(_type string, s Schema) typeInfo {
 
 var supportedTypes = map[string]typeInfo{
 	"string": newTypeInfo("string", Schema{
-		Format:  "string",
-		Example: "string",
+		Format:   "string",
+		Examples: []any{"string"},
 	}),
 	"int": newTypeInfo("integer", Schema{
-		Format:  "int",
-		Example: "255",
+		Format:   "int",
+		Examples: []any{"255"},
 	}),
 	"int8": newTypeInfo("number", Schema{
 		// https://spec.openapis.org/registry/format/int8
-		Format:  "int8",
-		Example: "0",
+		Format:   "int8",
+		Examples: []any{"0"},
 	}),
 	"int16": newTypeInfo("number", Schema{
 		// https://spec.openapis.org/registry/format/int16
-		Format:  "int16",
-		Example: "0",
+		Format:   "int16",
+		Examples: []any{"0"},
 	}),
 	"int32": newTypeInfo("number", Schema{
 		// https://spec.openapis.org/registry/format/int32
-		Format:  "int32",
-		Example: "0",
+		Format:   "int32",
+		Examples: []any{"0"},
 	}),
 	"int64": newTypeInfo("number", Schema{
 		// https://spec.openapis.org/registry/format/int64
-		Format:  "int64",
-		Example: "0",
+		Format:   "int64",
+		Examples: []any{"0"},
 	}),
 	"uint": newTypeInfo("integer", Schema{
-		Format:  "int",
-		Minimum: "0",
-		Example: "0",
+		Format:   "int",
+		Minimum:  "0",
+		Examples: []any{"0"},
 	}),
 	"uint8": newTypeInfo("integer", Schema{
-		Format:  "int8",
-		Example: "0",
-		Minimum: "0",
+		Format:   "int8",
+		Examples: []any{"0"},
+		Minimum:  "0",
 	}),
 	"uint16": newTypeInfo("integer", Schema{
-		Format:  "int16",
-		Example: "0",
-		Minimum: "0",
+		Format:   "int16",
+		Examples: []any{"0"},
+		Minimum:  "0",
 	}),
 	"uint32": newTypeInfo("integer", Schema{
-		Format:  "int32",
-		Example: "0",
-		Minimum: "0",
+		Format:   "int32",
+		Examples: []any{"0"},
+		Minimum:  "0",
 	}),
 	"uint64": newTypeInfo("integer", Schema{
-		Format:  "int64",
-		Example: "0",
-		Minimum: strconv.Itoa(2 ^ 64 - 1),
+		Format:   "int64",
+		Examples: []any{"0"},
+		Minimum:  strconv.Itoa(2 ^ 64 - 1),
 	}),
 	"float32": newTypeInfo("number", Schema{
-		Format:  "float",
-		Example: "0.01",
+		Format:   "float",
+		Examples: []any{"0.01"},
 	}),
 	"float64": newTypeInfo("number", Schema{
-		Format:  "double",
-		Example: "0.0",
-		Minimum: "0.01",
+		Format:   "double",
+		Examples: []any{"0.0"},
+		Minimum:  "0.01",
 	}),
 	"bool": newTypeInfo("boolean", Schema{
-		Format:  "bool",
-		Example: false,
+		Format:   "bool",
+		Examples: []any{false},
 	}),
 }
 
-func newDefinition(route *Route, schema any) Schema {
-	newSchema := new(Schema)
+func newDefinition(route *Route, schema any) *Schema {
 	st := reflect.TypeOf(schema)
 	sv := reflect.ValueOf(schema)
 
+	// Handle pointer types
 	if st.Kind() == reflect.Pointer {
 		st = st.Elem()
 		sv = sv.Elem()
 	}
 
-	// FIXME: refactor this it could look better
-	if st.Kind() != reflect.Struct && st.Kind() != reflect.Slice && st.Kind() != reflect.Map && st.Kind() != reflect.Array && st.Kind() != reflect.Pointer {
-		ts, ok := supportedTypes[st.String()]
-		if !ok {
-			panic("Unsupported type " + st.String() + ".")
-		}
-		return ts.info
+	switch st.Kind() {
+	case reflect.Map:
+		return handleMapType(route, st)
+	case reflect.Array, reflect.Slice:
+		return handleArrayType(route, st)
+	case reflect.Struct:
+		return handleStructType(route, st, sv)
+	default:
+		return handleBasicType(st)
 	}
 
-	if st.Kind() == reflect.Map {
-		if st.Key().Kind() != reflect.String {
-			panic("map key type must always be string.")
-		}
-		nd := newDefinition(route, reflect.Zero(st.Elem()).Interface())
-		newSchema.AdditionalProperties = &nd
-		return *newSchema
+}
+
+// handleBasicType will handle generating Schema for types such as int, string, and others
+func handleBasicType(st reflect.Type) *Schema {
+	ts, ok := supportedTypes[st.String()]
+	if !ok {
+		panic(fmt.Sprintf("Unsupported type: %s.", st.String()))
 	}
-	if st.Kind() == reflect.Array || st.Kind() == reflect.Slice {
-		newSchema.Type = "array"
-		nd := newDefinition(route, reflect.Zero(st.Elem()).Interface())
-		newSchema.Items = &nd
-		return *newSchema
+	return &ts.info
+}
+
+// Handle map types
+func handleMapType(route *Route, st reflect.Type) *Schema {
+	if st.Key().Kind() != reflect.String {
+		panic("Map key type must always be string.")
 	}
-	if st.Kind() != reflect.Struct {
-		panic("type on field must either be string, int, bool, struct, slice, map, or array.")
+
+	valueSchema := newDefinition(route, reflect.Zero(st.Elem()).Interface())
+	return &Schema{
+		AdditionalProperties: valueSchema,
 	}
-	// last remaining kind- reflect.Struct
-	if st == reflect.TypeFor[*File]() || st == reflect.TypeFor[File]() {
-		return Schema{ // this doesn't end up getting used
+}
+
+// Handle array or slice types
+func handleArrayType(route *Route, st reflect.Type) *Schema {
+	itemSchema := newDefinition(route, reflect.Zero(st.Elem()).Interface())
+	return &Schema{
+		Type:  "array",
+		Items: itemSchema,
+	}
+}
+
+// Handle struct types
+func handleStructType(route *Route, st reflect.Type, sv reflect.Value) *Schema {
+	// Handle special `File` type
+	if st == reflect.TypeOf((*File)(nil)).Elem() || st == reflect.TypeOf(File{}) {
+		return &Schema{
 			Ref: "$FILE",
 		}
 	}
-	newDef := Schema{}
-	newDef.Properties = make(map[string]*Schema)
-	newDef.Required = []string{}
-	for i := range st.NumField() {
-		newDef.Type = "object"
+
+	// Process struct fields
+	newDef := Schema{
+		Type:       "object",
+		Properties: make(map[string]*Schema),
+		Required:   []string{},
+	}
+
+	for i := 0; i < st.NumField(); i++ {
 		field := st.Field(i)
-		nd := newDefinition(route, sv.Field(i).Interface())
+		fieldSchema := newDefinition(route, sv.Field(i).Interface())
 
-		fieldName := field.Name
-		fieldNameSplit := strings.Split(field.Tag.Get("json"), ",")
-		if len(fieldName) > 0 {
-			fieldName = fieldNameSplit[0]
+		fieldName := parseJSONTag(field.Tag)
+		if fieldName == "" {
+			fieldName = field.Name
 		}
 
-		fieldRequired := field.Tag.Get("required")
-		b, err := resolveBool(fieldRequired, true)
-		if err != nil {
-			panic(err)
-		}
-		if b {
+		if isFieldRequired(field.Tag) {
 			newDef.Required = append(newDef.Required, fieldName)
 		}
-		newDef.Properties[fieldName] = &nd
+
+		newDef.Properties[fieldName] = fieldSchema
 	}
+
 	Schemas[st.Name()] = &newDef
-	newSchema.Ref = "#/components/schemas/" + st.Name()
-	return *newSchema
+	return &Schema{
+		Ref: "#/components/schemas/" + st.Name(),
+	}
+}
+
+// parseJSONTag is a helper method to grab the json field
+func parseJSONTag(tag reflect.StructTag) string {
+	jsonTag := tag.Get("json")
+	if jsonTag == "" {
+		return ""
+	}
+	return strings.Split(jsonTag, ",")[0]
+}
+
+// isFieldRequired is a helpermethod to grab the 'required' value
+func isFieldRequired(tag reflect.StructTag) bool {
+	requiredTag := tag.Get("required")
+	isRequired, err := resolveBool(requiredTag, true)
+	if err != nil {
+		panic(err)
+	}
+	return isRequired
 }

@@ -161,7 +161,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	c := NewContext(w, req)
+	c := NewContext(w, req, r.puff)
 	for _, route := range r.Routes {
 		if route.regexp == nil {
 			// TODO: need to fix this. this will be nil for the doc routes.

@@ -22,15 +22,19 @@ type Context struct {
 	registry map[string]any
 	// WebSocket represents WebSocket connection and its related context, connection, and events.
 	// WebSocket will be nil if the route does not use websockets.
-	WebSocket  *websocket.Conn
-	statusCode int
+	WebSocket *websocket.Conn
+
+	// LoggerConfig
+	LoggerConfig LoggerConfig
+	statusCode   int
 }
 
-func NewContext(w http.ResponseWriter, r *http.Request) *Context {
+func NewContext(w http.ResponseWriter, r *http.Request, a *PuffApp) *Context {
 	return &Context{
 		Request:        r,
 		ResponseWriter: w,
 		registry:       make(map[string]any), // prevents assignment to nil map
+		LoggerConfig:   *a.Config.LoggerConfig,
 	}
 }
 
@@ -153,8 +157,7 @@ func (c *Context) SendResponse(res Response) {
 	err := res.WriteContent(c)
 	if err != nil {
 		msg := fmt.Sprintf(
-			"[%s] An unexpected error occured while writing content with context: %s.",
-			c.GetRequestID(),
+			"An unexpected error occured while writing content with context: %s.",
 			err.Error(),
 		)
 		slog.Error(msg)

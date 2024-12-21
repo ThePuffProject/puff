@@ -22,6 +22,8 @@ type LoggingConfig struct {
 
 var DefaultLoggingConfig LoggingConfig = LoggingConfig{
 	LoggingFunction: func(ctx puff.Context, startTime time.Time) {
+		// lc := ctx.LoggerConfig
+		// FIXME: can now be based off ctx.LoggerConfig
 		processingTime := time.Since(startTime).String()
 		sc := ctx.GetStatusCode()
 		var statusColor string

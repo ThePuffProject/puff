@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"path"
 	"runtime"
+	"time"
 
 	"github.com/ThePuffProject/puff/color"
 )
@@ -26,6 +27,20 @@ type LoggerConfig struct {
 	AddSource bool
 	// Colorize enables or disables pretty logging dependant on LogLevel.
 	Colorize bool
+}
+
+var DefaultLoggerConfig = LoggerConfig{
+	UseJSON:    false,
+	Level:      slog.LevelInfo,
+	TimeFormat: time.UnixDate,
+	Colorize:   true,
+}
+
+var DefaultJSONLoggerConfig = LoggerConfig{
+	UseJSON:    true,
+	Level:      slog.LevelDebug,
+	TimeFormat: time.StampNano,
+	Colorize:   false,
 }
 
 // SlogHandler is puff's implementation of structured logging.
@@ -50,6 +65,7 @@ func (h *SlogHandler) Enabled(c context.Context, level slog.Level) bool {
 
 // Handle will write to stdout.
 func (h *SlogHandler) Handle(c context.Context, r slog.Record) error {
+	context.Background()
 	level := r.Level.String()
 	// level_formatted := fmt.Sprintf("%s:", r.Level.String())
 
@@ -117,14 +133,15 @@ func (h *SlogHandler) SetLevel(level slog.Level) {
 
 // NewLogger creates a new *slog.Logger provided the LoggerConfig.
 // Use this function if the default loggers; DefaultLogger and DefaultJSONLogger are not satisfactory.
-func NewLogger(c LoggerConfig) *slog.Logger {
+func NewLogger(c *LoggerConfig) *slog.Logger {
 	if c.Colorize && c.UseJSON {
 		panic("Cannot enable both json and color mode. Please pick only one.")
 	}
-	return slog.New(NewSlogHandler(c))
+	return slog.New(NewSlogHandler(*c))
 }
 
 func createSource(pc uintptr) *slog.Source {
+
 	fs := runtime.CallersFrames([]uintptr{pc})
 	f, _ := fs.Next()
 	return &slog.Source{
@@ -136,20 +153,10 @@ func createSource(pc uintptr) *slog.Source {
 
 // DefaultLogger returns a slog.Logger which will use the default text logger.
 func DefaultLogger() *slog.Logger {
-	return NewLogger(LoggerConfig{
-		UseJSON:    false,
-		Level:      slog.LevelInfo,
-		TimeFormat: "[2006-01-02 15:04:05.000]",
-		Colorize:   true,
-	})
+	return NewLogger(&DefaultLoggerConfig)
 }
 
 // DefaultLogger returns a slog.Logger which will use the default json logger.
 func DefaultJSONLogger() *slog.Logger {
-	return NewLogger(LoggerConfig{
-		UseJSON:    true,
-		Level:      slog.LevelInfo,
-		TimeFormat: "[2006-01-02 15:04:05.000]",
-		Colorize:   false,
-	})
+	return NewLogger(&DefaultJSONLoggerConfig)
 }

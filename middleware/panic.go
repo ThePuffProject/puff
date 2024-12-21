@@ -23,7 +23,7 @@ var DefaultPanicConfig PanicConfig = PanicConfig{
 	FormatErrorResponse: func(c puff.Context, err any) puff.Response {
 		errorID := puff.RandomNanoID()
 		slog.Error("Panic During Execution", slog.String("ERROR ID", errorID), slog.Any("Error", err))
-		errorMsg := fmt.Sprintf("There was a panic during the execution recovered by the panic handling middleware. Error ID: " + errorID)
+		errorMsg := fmt.Sprintf("There was a panic during the execution recovered by the panic handling middleware. Error ID: %s", errorID)
 		return puff.JSONResponse{StatusCode: http.StatusInternalServerError, Content: map[string]any{"error": errorMsg, "Request-ID": c.GetRequestID()}}
 	},
 	Skip: DefaultSkipper,

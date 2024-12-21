@@ -2,15 +2,13 @@
 
 An extensible, performant, and reliable framework inspired by FastAPI.
 
-![Alt](https://repobeats.axiom.co/api/embed/66ccd66540fab2ca27806fc48acba71ab93721d5.svg "Repobeats analytics image")
-
 ## Features
 
 - Automatic OpenAPI documentation generation and hosting.
-- Tree-structure style Routers to group APIs.
-- Extensible middlewares.
+- Tree-style structure Routers to group APIs.
+- Extensible default middlewares.
 - Customizable logger with structured and prettier logging.
-- Adhere to standards set by net/http, and RFC-compliant.
+- Adheres to standards set by net/http, and RFC-compliant.
 - Simplicity where possible and build upon the goated stdlib when possible.
   - Only has 2 external dependencies!
 

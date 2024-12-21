@@ -6,7 +6,7 @@ import "log/slog"
 type HandlerFunc func(*Context)
 type Middleware func(next HandlerFunc) HandlerFunc
 
-// AppConfig is defines PuffApp parameters.
+// AppConfig defines PuffApp parameters.
 type AppConfig struct {
 	// Name is the application name
 	Name string
@@ -20,36 +20,38 @@ type AppConfig struct {
 	TLSPrivateKeyFile string
 	// OpenAPI configuration. Gives users access to the OpenAPI spec generated. Can be manipulated by the user.
 	OpenAPI *OpenAPI
+	// SwaggerUIConfig is the UI specific configuration.
+	SwaggerUIConfig *SwaggerUIConfig
+	// LoggerConfig is the application logger config.
+	LoggerConfig *LoggerConfig
+	// DisableOpenAPIGeneration controls whether an OpenAPI schema will be generated.
+	DisableOpenAPIGeneration bool
 }
 
 func App(c *AppConfig) *PuffApp {
 	r := &Router{Name: "Default", Tag: "Default", Description: "Default Router"}
-	if c.Version == "" {
-		c.Version = "0.0.0"
-	}
 
 	a := &PuffApp{
-		Name:              c.Name,
-		Version:           c.Version,
-		DocsURL:           c.DocsURL,
-		TLSPublicCertFile: c.TLSPublicCertFile,
-		TLSPrivateKeyFile: c.TLSPrivateKeyFile,
-		RootRouter:        r,
-		OpenAPI:           c.OpenAPI,
+		Config:     c,
+		RootRouter: r,
 	}
+	if a.Config.LoggerConfig == nil {
+		a.Config.LoggerConfig = &LoggerConfig{}
+	}
+	l := NewLogger(a.Config.LoggerConfig)
+	slog.SetDefault(l)
+
 	a.RootRouter.puff = a
 	a.RootRouter.Responses = Responses{}
 	return a
 }
 
 func DefaultApp(name string) *PuffApp {
-	c := AppConfig{
-		Version: "1.0.0",
+	app := App(&AppConfig{
+		Version: "0.0.0",
 		Name:    name,
 		DocsURL: "/docs",
-	}
-	a := App(&c)
-	a.Logger = DefaultLogger()
-	slog.SetDefault(a.Logger)
-	return a
+	})
+
+	return app
 }

@@ -26,22 +26,22 @@ func TestApp(t *testing.T) {
 	}
 	app := puff.App(&config)
 
-	if app.Name != "TestApp" {
-		t.Errorf("Expected app name 'TestApp', got '%s'", app.Name)
+	if app.Config.Name != "TestApp" {
+		t.Errorf("Expected app name 'TestApp', got '%s'", app.Config.Name)
 	}
-	if app.Version != "1.2.3" {
-		t.Errorf("Expected version '1.2.3', got '%s'", app.Version)
+	if app.Config.Version != "1.2.3" {
+		t.Errorf("Expected version '1.2.3', got '%s'", app.Config.Version)
 	}
-	if app.DocsURL != "/test-docs" {
-		t.Errorf("Expected DocsURL '/test-docs', got '%s'", app.DocsURL)
+	if app.Config.DocsURL != "/test-docs" {
+		t.Errorf("Expected DocsURL '/test-docs', got '%s'", app.Config.DocsURL)
 	}
-	if app.TLSPublicCertFile != "cert.pem" {
-		t.Errorf("Expected TLSPublicCertFile 'cert.pem', got '%s'", app.TLSPublicCertFile)
+	if app.Config.TLSPublicCertFile != "cert.pem" {
+		t.Errorf("Expected TLSPublicCertFile 'cert.pem', got '%s'", app.Config.TLSPublicCertFile)
 	}
-	if app.TLSPrivateKeyFile != "key.pem" {
-		t.Errorf("Expected TLSPrivateKeyFile 'key.pem', got '%s'", app.TLSPrivateKeyFile)
+	if app.Config.TLSPrivateKeyFile != "key.pem" {
+		t.Errorf("Expected TLSPrivateKeyFile 'key.pem', got '%s'", app.Config.TLSPrivateKeyFile)
 	}
-	if app.OpenAPI != nil {
+	if app.Config.OpenAPI != nil {
 		t.Errorf("Expected OpenAPI to not be set.")
 	}
 	if app.RootRouter == nil {
@@ -62,25 +62,22 @@ func TestApp_DefaultVersion(t *testing.T) {
 	}
 	app := puff.App(&config)
 
-	if app.Version != "0.0.0" {
-		t.Errorf("Expected default version '0.0.0', got '%s'", app.Version)
+	if app.Config.Version != "0.0.0" {
+		t.Errorf("Expected default version '0.0.0', got '%s'", app.Config.Version)
 	}
 }
 
 func TestDefaultApp(t *testing.T) {
 	app := puff.DefaultApp("DefaultAppTest")
 
-	if app.Name != "DefaultAppTest" {
-		t.Errorf("Expected app name 'DefaultAppTest', got '%s'", app.Name)
+	if app.Config.Name != "DefaultAppTest" {
+		t.Errorf("Expected app name 'DefaultAppTest', got '%s'", app.Config.Name)
 	}
-	if app.Version != "1.0.0" {
-		t.Errorf("Expected default version '1.0.0', got '%s'", app.Version)
+	if app.Config.Version != "1.0.0" {
+		t.Errorf("Expected default version '1.0.0', got '%s'", app.Config.Version)
 	}
-	if app.DocsURL != "/docs" {
-		t.Errorf("Expected default DocsURL '/docs', got '%s'", app.DocsURL)
-	}
-	if app.Logger == nil {
-		t.Fatalf("Expected Logger to be initialized")
+	if app.Config.DocsURL != "/docs" {
+		t.Errorf("Expected default DocsURL '/docs', got '%s'", app.Config.DocsURL)
 	}
 }
 
