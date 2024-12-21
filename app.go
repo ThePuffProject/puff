@@ -259,10 +259,10 @@ func (a *PuffApp) GenerateDefinitions(paths Paths) map[string]*Schema {
 
 // Shutdown calls shutdown on the underlying server with a non-nil empty context.
 func (a *PuffApp) Shutdown(ctx context.Context) error {
-	return a.server.Shutdown(ctx)
+	return a.Server.Shutdown(ctx)
 }
 
 // Close calls close on the underlying server.
 func (a *PuffApp) Close() error {
-	return a.server.Close()
+	return a.Server.Close()
 }
