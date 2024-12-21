@@ -7,6 +7,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+
+	"github.com/tiredkangaroo/websocket"
 )
 
 // Context provides functionality for the route.
@@ -20,7 +22,7 @@ type Context struct {
 	registry map[string]any
 	// WebSocket represents WebSocket connection and its related context, connection, and events.
 	// WebSocket will be nil if the route does not use websockets.
-	WebSocket *WebSocket
+	WebSocket *websocket.Conn
 
 	// LoggerConfig
 	LoggerConfig LoggerConfig
