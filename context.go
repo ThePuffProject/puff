@@ -74,6 +74,7 @@ func (ctx *Context) SetResponseHeader(k, v string) {
 
 // GetBody returns the request body.
 func (ctx *Context) GetBody() ([]byte, error) {
+
 	defer ctx.Request.Body.Close()
 	return io.ReadAll(ctx.Request.Body)
 }
