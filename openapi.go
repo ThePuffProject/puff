@@ -123,6 +123,7 @@ func convertRouteResponsestoOpenAPIResponses(route Route) map[string]OpenAPIResp
 			Content: map[string]MediaType{
 				"application/json": {Schema: schema},
 			},
+			Description: http.StatusText(statusCode),
 		}
 	}
 	return openAPIResponses
