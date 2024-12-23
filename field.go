@@ -263,9 +263,12 @@ func populateInputSchema(c *Context, s any, p []Parameter, matches []string) err
 		return nil
 	}
 	// FIXME: allow user to specify memory
-	c.Request.ParseMultipartForm(10 << 20) // leftshift to represent 10 mb
-	sve := reflect.ValueOf(s).Elem()       //will not panic because we can confirm
-	pathparamsindex := 0                   //pathparamsindex is the amount of path params already reviewed
+
+	if c.GetRequestHeader("Content-Type") == "multipart/form-data" {
+		c.Request.ParseMultipartForm(10 << 20) // leftshift to represent 10 mb
+	}
+	sve := reflect.ValueOf(s).Elem() //will not panic because we can confirm
+	pathparamsindex := 0             //pathparamsindex is the amount of path params already reviewed
 	for i, pa := range p {
 		var value string
 		var err error
@@ -274,6 +277,7 @@ func populateInputSchema(c *Context, s any, p []Parameter, matches []string) err
 			value, err = getRequestHeaderParam(c, pa)
 		case "path":
 			value, err = getPathParam(pathparamsindex, pa, matches)
+			pathparamsindex++
 		case "query":
 			value, err = getQueryParam(c, pa)
 		case "cookie":
@@ -287,10 +291,10 @@ func populateInputSchema(c *Context, s any, p []Parameter, matches []string) err
 			newFile := new(File)
 			file, fileHeader, err := c.GetFormFile(pa.Name)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get file for parameter %s: %w", pa.Name, err)
 			}
 			if fileHeader == nil {
-				return fmt.Errorf("file header is nil")
+				return fmt.Errorf("missing file header for parameter %s", pa.Name)
 			}
 			newFile.Name = fileHeader.Filename
 			newFile.Size = fileHeader.Size
@@ -300,7 +304,7 @@ func populateInputSchema(c *Context, s any, p []Parameter, matches []string) err
 			continue
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get parameter %s: %w", pa.Name, err)
 		}
 		field := sve.Field(i) //has to be there because handleInputSchema
 		err = populateField(value, field)
