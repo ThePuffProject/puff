@@ -189,17 +189,13 @@ func getPathParam(index int, param Parameter, matches []string) (string, error) 
 
 // getBodyParam gets the value of the param from the body.
 // It will return an error if it is not found AND required.
-func getBodyParam(c *Context, param Parameter, parsedBody []byte) (string, error) {
-	var err error
-
-	if len(parsedBody) == 0 {
-		parsedBody, err = c.GetBody()
-		if err != nil {
-			return "", fmt.Errorf("an error occurred while reading the body: %s", err.Error())
-		}
+func getBodyParam(c *Context, param Parameter) (string, error) {
+	// Read the body
+	parsedBody, err := c.GetBody()
+	if err != nil {
+		return "", fmt.Errorf("an error occurred while reading the body: %s", err.Error())
 	}
 
-	// Read the body content
 	return handleParam(string(parsedBody), param)
 }
 
@@ -268,7 +264,6 @@ func populateInputSchema(c *Context, s any, p []Parameter, matches []string) err
 		return nil
 	}
 	// FIXME: allow user to specify memory
-	parsedBody := make([]byte, 10<<20)
 	if c.GetRequestHeader("Content-Type") == "multipart/form-data" {
 		c.Request.ParseMultipartForm(10 << 20) // leftshift to represent 10 mb
 	}
@@ -288,7 +283,7 @@ func populateInputSchema(c *Context, s any, p []Parameter, matches []string) err
 		case "cookie":
 			value, err = getCookieParam(c, pa)
 		case "body":
-			value, err = getBodyParam(c, pa, parsedBody)
+			value, err = getBodyParam(c, pa)
 		case "form":
 			value, err = getFormParam(c, pa)
 		case "file":
