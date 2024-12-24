@@ -43,7 +43,7 @@ func addRoute(route *Route, tags *[]Tag, tagNames *[]string, paths *Paths) *Path
 		*tagNames = append(*tagNames, tag)
 		*tags = append(*tags, Tag{Name: tag, Description: ""})
 	}
-	parameters := make([]Parameter, len(route.params))
+	parameters := []Parameter{}
 	var requestBody RequestBodyOrReference
 	for _, p := range route.params {
 		if p.In == "body" {
@@ -123,6 +123,7 @@ func convertRouteResponsestoOpenAPIResponses(route Route) map[string]OpenAPIResp
 			Content: map[string]MediaType{
 				"application/json": {Schema: schema},
 			},
+			Description: http.StatusText(statusCode),
 		}
 	}
 	return openAPIResponses
