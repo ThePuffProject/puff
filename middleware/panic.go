@@ -32,9 +32,9 @@ var DefaultPanicConfig PanicConfig = PanicConfig{
 // createCSRFMiddleware is used to create a panic middleware with a config.
 func createPanicMiddleware(pc PanicConfig) puff.Middleware {
 	return func(next puff.HandlerFunc) puff.HandlerFunc {
-		return func(c *puff.Context) {
+		return func(c *puff.Context, f any) {
 			if pc.Skip != nil && pc.Skip(c) {
-				next(c)
+				next(c, f)
 				return
 			}
 			defer func() {
@@ -44,7 +44,7 @@ func createPanicMiddleware(pc PanicConfig) puff.Middleware {
 					c.SendResponse(res)
 				}
 			}()
-			next(c)
+			next(c, f)
 		}
 	}
 }

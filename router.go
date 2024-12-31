@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"runtime"
 	"strings"
 )
 
@@ -23,8 +22,8 @@ type Router struct {
 
 	// parent maps to the router's immediate parent. Will be nil for RootRouter
 	parent *Router
-	// puff maps to the original PuffApp
-	puff *PuffApp
+	// puffapp maps to the original PuffApp
+	puffapp *PuffApp
 }
 
 // NewRouter creates a new router provided router name and path prefix.
@@ -36,82 +35,82 @@ func NewRouter(name string, prefix string) *Router {
 	}
 }
 
-func (r *Router) registerRoute(
-	method string,
-	path string,
-	handleFunc func(*Context),
-	fields any,
-) *Route {
-	_, file, line, ok := runtime.Caller(2)
-	newRoute := Route{
-		Description: readDescription(file, line, ok),
-		Path:        path,
-		Handler:     handleFunc,
-		Protocol:    method,
-		Fields:      fields,
-		Router:      r,
-		Responses:   Responses{},
-	}
+// func (r *Router) registerRoute(
+// 	method string,
+// 	path string,
+// 	handleFunc func(*Context),
+// 	fields any,
+// ) *Route {
+// 	_, file, line, ok := runtime.Caller(2)
+// 	newRoute := Route{
+// 		Description: readDescription(file, line, ok),
+// 		Path:        path,
+// 		Handler:     handleFunc,
+// 		Protocol:    method,
+// 		Fields:      fields,
+// 		Router:      r,
+// 		Responses:   Responses{},
+// 	}
 
-	r.Routes = append(r.Routes, &newRoute)
-	return &newRoute
-}
+// 	r.Routes = append(r.Routes, &newRoute)
+// 	return &newRoute
+// }
 
-func (r *Router) Get(
-	path string,
-	fields any,
-	handleFunc func(*Context),
-) *Route {
-	return r.registerRoute(http.MethodGet, path, handleFunc, fields)
-}
+// func (r *Router) Get(
+// 	path string,
+// 	fields any,
+// 	handleFunc func(*Context),
+// ) *Route {
+// 	return r.registerRoute(http.MethodGet, path, handleFunc, fields)
+// }
 
-func (r *Router) Post(
-	path string,
-	fields any,
-	handleFunc func(*Context),
-) *Route {
-	return r.registerRoute(http.MethodPost, path, handleFunc, fields)
-}
+// func (r *Router) Post(
+// 	path string,
+// 	fields any,
+// 	handleFunc func(*Context),
+// ) *Route {
+// 	return r.registerRoute(http.MethodPost, path, handleFunc, fields)
+// }
 
-func (r *Router) Put(
-	path string,
-	fields any,
-	handleFunc func(*Context),
-) *Route {
-	return r.registerRoute(http.MethodPut, path, handleFunc, fields)
-}
+// func (r *Router) Put(
+// 	path string,
+// 	fields any,
+// 	handleFunc func(*Context),
+// ) *Route {
+// 	return r.registerRoute(http.MethodPut, path, handleFunc, fields)
+// }
 
-func (r *Router) Patch(
-	path string,
-	fields any,
-	handleFunc func(*Context),
-) *Route {
-	return r.registerRoute(http.MethodPatch, path, handleFunc, fields)
-}
+// func (r *Router) Patch(
+// 	path string,
+// 	fields any,
+// 	handleFunc func(*Context),
+// ) *Route {
+// 	return r.registerRoute(http.MethodPatch, path, handleFunc, fields)
+// }
 
-func (r *Router) Delete(
-	path string,
-	fields any,
-	handleFunc func(*Context),
-) *Route {
-	return r.registerRoute(http.MethodDelete, path, handleFunc, fields)
-}
+// func (r *Router) Delete(
+// 	path string,
+// 	fields any,
+// 	handleFunc func(*Context),
+// ) *Route {
+// 	return r.registerRoute(http.MethodDelete, path, handleFunc, fields)
+// }
 
-func (r *Router) WebSocket(
-	path string,
-	fields any,
-	handleFunc func(*Context),
-) *Route {
-	newRoute := Route{
-		WebSocket: true,
-		Protocol:  "GET",
-		Path:      path,
-		Handler:   handleFunc,
-		Fields:    fields,
-	}
-	r.Routes = append(r.Routes, &newRoute)
-	return &newRoute
-}
+// func (r *Router) WebSocket(
+// 	path string,
+// 	fields any,
+// 	handleFunc func(*Context),
+// ) *Route {
+// 	newRoute := Route{
+// 		WebSocket: true,
+// 		Protocol:  "GET",
+// 		Path:      path,
+// 		Handler:   handleFunc,
+// 		Fields:    fields,
+// 	}
+// 	r.Routes = append(r.Routes, &newRoute)
+// 	return &newRoute
+// }
 
 func (r *Router) IncludeRouter(rt *Router) {
 	if rt.parent != nil {
@@ -207,17 +206,27 @@ func (r *Router) AllRoutes() []*Route {
 	return routes
 }
 
-func (r *Router) patchRoutes() {
+func (r *Router) patchRoutes() error {
+	var err error
 	for _, route := range r.Routes {
 		route.Router = r
-		route.getCompletePath()
-		route.createRegexMatch()
-		err := route.handleInputSchema()
+
+		route.FullPath()
+
+		route.regexp, err = route.createRegexMatch()
 		if err != nil {
-			panic("error with Input Schema for route " + route.Path + " on router " + r.Name + ". Error: " + err.Error())
+			return regexpError(route.fullPath, err)
 		}
-		slog.Debug(fmt.Sprintf("Serving route: %s", route.fullPath))
+
+		err := handleInputSchema(route)
+		if err != nil {
+			return schemaError(err)
+		}
+
 		// populate route with their respective responses
 		route.GenerateResponses()
+
+		slog.Debug(fmt.Sprintf("Serving route: %s", route.fullPath))
 	}
+	return nil
 }

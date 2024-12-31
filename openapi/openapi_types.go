@@ -1,4 +1,4 @@
-package puff
+package openapi
 
 // OpenAPI struct represents the root of the OpenAPI document.
 type OpenAPI struct {
@@ -16,18 +16,18 @@ type OpenAPI struct {
 	schemas *SchemaDefinition
 }
 
-func NewOpenAPI(a *PuffApp) *OpenAPI {
+func NewOpenAPI(name string, version string) *OpenAPI {
 	o := &OpenAPI{
 		SpecVersion: "3.1.0",
 		Info: &Info{
-			Title:   a.Config.Name,
-			Version: a.Config.Version,
+			Title:   name,
+			Version: version,
 			Contact: &Contact{},
 			License: &License{},
 		},
 		Servers:      &[]Server{},
 		Paths:        new(Paths),
-		Components:   NewComponents(a),
+		Components:   NewComponents(),
 		Webhooks:     make(map[string]any),
 		Security:     &[]SecurityRequirement{},
 		Tags:         &[]Tag{},
@@ -98,7 +98,7 @@ type Components struct {
 	PathItems       map[string]any    `json:"pathItems,omitempty"`
 }
 
-func NewComponents(a *PuffApp) *Components {
+func NewComponents() *Components {
 	return &Components{
 		Schemas:         &Schemas,
 		Responses:       make(map[string]any),

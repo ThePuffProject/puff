@@ -14,8 +14,10 @@ func ResponseType[T any]() reflect.Type {
 	return reflect.TypeOf(new(T)).Elem()
 }
 
+type StatusCode int
+
 // Responses type maps together the HTTPStatusCode with a function returning the reflect.Type
-type Responses = map[int]func() reflect.Type
+type Responses = map[StatusCode]func() reflect.Type
 
 // ResponseDefinition represents a definition of a response for a specific HTTP status code.
 // It is used to map an HTTP status code to the corresponding response type for a route.

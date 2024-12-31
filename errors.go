@@ -2,7 +2,7 @@ package puff
 
 import "fmt"
 
-func FieldTypeError(value string, expectedType string) error {
+func fieldTypeError(value string, expectedType string) error {
 	return fmt.Errorf(
 		"type error: the value %s cant be used as the expected type %s",
 		value,
@@ -10,7 +10,7 @@ func FieldTypeError(value string, expectedType string) error {
 	)
 }
 
-func BadFieldType(k string, got string, expected string) error {
+func badFieldType(k string, got string, expected string) error {
 	return fmt.Errorf(
 		"type error: the value for key %s: %s cannot be used for expected type %s",
 		k,
@@ -19,14 +19,22 @@ func BadFieldType(k string, got string, expected string) error {
 	)
 }
 
-func ExpectedButNotFound(k string) error {
+func regexpError(s string, e error) error {
+	return fmt.Errorf("regexp error: creating regexp for route with fullpath %s encountered an error: %v", s, e)
+}
+
+func schemaError(e error) error {
+	return fmt.Errorf("schema error: %v", e)
+}
+
+func expectedButNotFound(k string) error {
 	return fmt.Errorf("expected key %s but not found in json", k)
 }
 
-func UnexpectedJSONKey(k string) error {
+func unexpectedJSONKey(k string) error {
 	return fmt.Errorf("unexpected json key: %s", k)
 }
 
-func InvalidJSONError(v string) error {
-	return fmt.Errorf("expected json, but got invalid json")
+func invalidJSONError(v string) error {
+	return fmt.Errorf("got invalid json")
 }

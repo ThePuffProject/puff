@@ -54,13 +54,13 @@ var DefaultLoggingConfig LoggingConfig = LoggingConfig{
 
 func createLoggingMiddleware(lc LoggingConfig) puff.Middleware {
 	return func(next puff.HandlerFunc) puff.HandlerFunc {
-		return func(ctx *puff.Context) {
+		return func(ctx *puff.Context, f any) {
 			if lc.Skip != nil && lc.Skip(ctx) {
-				next(ctx)
+				next(ctx, f)
 				return
 			}
 			startTime := time.Now()
-			next(ctx)
+			next(ctx, f)
 			lc.LoggingFunction(*ctx, startTime)
 		}
 	}

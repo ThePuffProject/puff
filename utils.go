@@ -78,18 +78,3 @@ func isAnyOfThese[T comparable](value T, these ...T) bool {
 	}
 	return false
 }
-func resolveBool(spec string, def bool) (b bool, err error) {
-	switch spec {
-	case "":
-		b = def
-	case "true":
-		b = true
-	case "false":
-		b = false
-	default:
-		b = def
-		err = fmt.Errorf("specified boolean on field must be either true or false")
-		return
-	}
-	return
-}

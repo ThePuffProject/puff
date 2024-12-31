@@ -2,7 +2,6 @@ package puff
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
@@ -35,6 +34,10 @@ func NewContext(w http.ResponseWriter, r *http.Request, a *PuffApp) *Context {
 		ResponseWriter: w,
 		registry:       make(map[string]any), // prevents assignment to nil map
 		LoggerConfig:   *a.Config.LoggerConfig,
+		// GetBody: sync.OnceValues(func() ([]byte, error) {
+		// 	defer r.Body.Close()
+		// 	return io.ReadAll(r.Body)
+		// }),
 	}
 }
 
@@ -70,12 +73,6 @@ func (ctx *Context) GetResponseHeader(k string) string {
 // SetResponseHeader sets the value of the response header k to v.
 func (ctx *Context) SetResponseHeader(k, v string) {
 	ctx.ResponseWriter.Header().Set(k, v)
-}
-
-// GetBody returns the request body.
-func (ctx *Context) GetBody() ([]byte, error) {
-	defer ctx.Request.Body.Close()
-	return io.ReadAll(ctx.Request.Body)
 }
 
 // GetQueryParam retrives the value of a query param from k.
