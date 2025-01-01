@@ -45,20 +45,25 @@ func (a *PuffApp) handleOpenAPI() error {
 	docsRouter := NewRouter(fmt.Sprintf("Swagger Documentation for %s", a.Config.Name), a.Config.DocsURL)
 
 	// Swagger Page
-	Get(docsRouter, "", func(ctx *Context, _ *NoFields) {
+	r := Get(docsRouter, "", func(ctx *Context, _ *NoFields) {
 		ctx.SendResponse(HTMLResponse{
 			StatusCode: 200,
 			Template:   openapi.SwaggerHTML,
+			Data:       a.Config.SwaggerUIConfig,
 		})
 	})
+	r.FullPath()
+	r.regexp, _ = r.createRegexMatch()
 
 	// OpenAPI JSON
-	Get(docsRouter, ".json", func(ctx *Context, _ *NoFields) {
+	r = Get(docsRouter, ".json", func(ctx *Context, _ *NoFields) {
 		ctx.SendResponse(JSONResponse{
 			StatusCode: 200,
 			Content:    a.Config.OpenAPI,
 		})
 	})
+	r.FullPath()
+	r.regexp, _ = r.createRegexMatch()
 
 	a.IncludeRouter(docsRouter)
 	return nil
@@ -199,28 +204,16 @@ func (a *PuffApp) generateOpenAPISpec() {
 // Returns (paths, tags) to populate the 'Paths' and 'Tags' attribute of OpenAPI
 func (a *PuffApp) generatePathsTags() (*openapi.Paths, *[]openapi.Tag) {
 	tags := []openapi.Tag{}
-	tagNames := []string{}
 	var paths = make(openapi.Paths)
 	for _, route := range a.Router.Routes {
-		addRoute(route, &tags, &tagNames, &paths)
+		route.addRouteToPaths(paths)
 	}
 	for _, router := range a.Router.Routers {
 		for _, route := range router.Routes {
-			addRoute(route, &tags, &tagNames, &paths)
+			route.addRouteToPaths(paths)
 		}
 	}
 	return &paths, &tags
-}
-
-// GenerateDefinitions is a helper function that takes a list of Paths and generates the OpenAPI schema for each path.
-func (a *PuffApp) GenerateDefinitions(paths Paths) map[string]*openapi.Schema {
-	definitions := map[string]*openapi.Schema{}
-	for _, p := range paths {
-		for _, routeParams := range *p.Parameters {
-			definitions[routeParams.Name] = routeParams.Schema
-		}
-	}
-	return definitions
 }
 
 // Shutdown calls shutdown on the underlying server with a non-nil empty context.

@@ -8,7 +8,6 @@ import (
 func (c *Context) handleWebSocket() error {
 	conn, err := websocket.AcceptHTTP(c.ResponseWriter, c.Request)
 	if err != nil {
-		c.BadRequest(err.Error())
 		return err
 	}
 

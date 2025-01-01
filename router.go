@@ -123,7 +123,7 @@ func (r *Router) IncludeRouter(rt *Router) {
 
 	rt.parent = r
 	if rt.parent != nil {
-		rt.puff = rt.parent.puff
+		rt.puffapp = rt.parent.puffapp
 	}
 	r.Routers = append(r.Routers, rt)
 }
@@ -154,37 +154,41 @@ func (r *Router) String() string {
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	defer req.Body.Close()
 	for _, router := range r.Routers {
 		if strings.HasPrefix(req.URL.Path, router.Prefix) {
 			router.ServeHTTP(w, req)
 			return
 		}
 	}
-	c := NewContext(w, req, r.puff)
+	c := NewContext(w, req, r.puffapp)
 	for _, route := range r.Routes {
-		if route.regexp == nil {
-			// TODO: need to fix this. this will be nil for the doc routes.
-			route.getCompletePath()
-			route.createRegexMatch()
-		}
 		isMatch := route.regexp.MatchString(req.URL.Path)
-		if isMatch && req.Method == route.Protocol {
-			matches := route.regexp.FindStringSubmatch(req.URL.Path)
-			err := populateInputSchema(c, route.Fields, route.params, matches)
-			if err != nil {
-				c.BadRequest(err.Error())
-				return
-			}
-			if route.WebSocket {
-				err := c.handleWebSocket()
-				if err != nil { // the message has already been passed on by the function; we may just return at this point
-					return
-				}
-			}
-			handler := route.Handler
-			handler(c)
+		if !isMatch || req.Method != route.Protocol {
+			// fmt.Println(req.URL.Path, "does not match", route.fullPath, "because the route has regexp", route.regexp)
+			continue
+		}
+		matches := route.regexp.FindStringSubmatch(req.URL.Path)
+		if len(matches) > 0 {
+			matches = matches[1:]
+		}
+		f, err := fieldsFromIncoming(c, route, matches)
+		if err != nil {
+			c.BadRequest(err.Error())
 			return
 		}
+
+		if route.WebSocket {
+			err := c.handleWebSocket()
+			if err != nil {
+				c.BadRequest("websocket error")
+				return
+			}
+		}
+
+		handler := route.Handler
+		handler(c, f)
+		return
 	}
 	http.NotFound(w, req)
 }
@@ -218,13 +222,13 @@ func (r *Router) patchRoutes() error {
 			return regexpError(route.fullPath, err)
 		}
 
-		err := handleInputSchema(route)
+		err := handleInputSchema(&route.params, route.fieldsType)
 		if err != nil {
 			return schemaError(err)
 		}
 
 		// populate route with their respective responses
-		route.GenerateResponses()
+		route.generateResponses()
 
 		slog.Debug(fmt.Sprintf("Serving route: %s", route.fullPath))
 	}

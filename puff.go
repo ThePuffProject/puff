@@ -42,15 +42,15 @@ type AppConfig struct {
 	DisableOpenAPIGeneration bool
 
 	// LoggerConfig is the application logger config.
-	LoggerConfig LoggerConfig
+	LoggerConfig *LoggerConfig
 }
 
 func App(c *AppConfig) *PuffApp {
 	r := &Router{Name: "Default", Tag: "Default", Description: "Default Router"}
 
 	a := &PuffApp{
-		Config:     c,
-		RootRouter: r,
+		Config: c,
+		Router: r,
 	}
 	if a.Config.LoggerConfig == nil {
 		a.Config.LoggerConfig = &LoggerConfig{}
@@ -58,7 +58,7 @@ func App(c *AppConfig) *PuffApp {
 	l := NewLogger(a.Config.LoggerConfig)
 	slog.SetDefault(l)
 
-	a.Router.puff = a
+	a.Router.puffapp = a
 	a.Router.Responses = Responses{}
 	return a
 }
@@ -69,6 +69,15 @@ func DefaultApp(name string) *PuffApp {
 		Name:    name,
 		DocsURL: "/docs",
 	})
+
+	app.Config.SwaggerUIConfig = &openapi.SwaggerUIConfig{
+		Title:           app.Config.Name,
+		URL:             app.Config.DocsURL + ".json",
+		Theme:           "obsidian",
+		Filter:          true,
+		RequestDuration: false,
+		FaviconURL:      "https://fav.farm/💨",
+	}
 
 	return app
 }
@@ -83,7 +92,8 @@ func registerRoute(router *Router, method string, path string, fieldsType reflec
 		description = readDescription(file, line)
 	}
 
-	if fieldsType == nilschema { // no fields
+	// validate fieldsType here!
+	if fieldsType.NumField() == 0 { // no fields
 		fieldsType = nil
 	}
 
@@ -103,42 +113,48 @@ func registerRoute(router *Router, method string, path string, fieldsType reflec
 // Get registers a GET route on the router.
 func Get[T any](router *Router, path string, handler func(*Context, *T)) *Route {
 	return registerRoute(router, "GET", path, reflect.TypeFor[T](), func(ctx *Context, f any) {
-		handler(ctx, f.(*T))
+		v := f.(T)
+		handler(ctx, &v)
 	})
 }
 
 // Post registers a POST route on the router.
 func Post[T any](router *Router, path string, handler func(*Context, *T)) *Route {
 	return registerRoute(router, "POST", path, reflect.TypeFor[T](), func(ctx *Context, f any) {
-		handler(ctx, f.(*T))
+		v := f.(T)
+		handler(ctx, &v)
 	})
 }
 
 // Put registers a PUT route on the router.
 func Put[T any](router *Router, path string, handler func(*Context, *T)) *Route {
 	return registerRoute(router, "PUT", path, reflect.TypeFor[T](), func(ctx *Context, f any) {
-		handler(ctx, f.(*T))
+		v := f.(T)
+		handler(ctx, &v)
 	})
 }
 
 // Patch registers a PATCH route on the router.
 func Patch[T any](router *Router, path string, handler func(*Context, *T)) *Route {
 	return registerRoute(router, "PATCH", path, reflect.TypeFor[T](), func(ctx *Context, f any) {
-		handler(ctx, f.(*T))
+		v := f.(T)
+		handler(ctx, &v)
 	})
 }
 
 // Delete registers a DELETE route on the router.
 func Delete[T any](router *Router, path string, handler func(*Context, *T)) *Route {
 	return registerRoute(router, "DELETE", path, reflect.TypeFor[T](), func(ctx *Context, f any) {
-		handler(ctx, f.(*T))
+		v := f.(T)
+		handler(ctx, &v)
 	})
 }
 
 // WebSocket registers a WebSocket route on the router. WithResponse() must not be called on the Route returned.
 func WebSocket[T any](router *Router, path string, handler func(*Context, *T)) *Route {
 	route := registerRoute(router, "GET", path, reflect.TypeFor[T](), func(ctx *Context, f any) {
-		handler(ctx, f.(*T))
+		v := f.(T)
+		handler(ctx, &v)
 	})
 	route.WebSocket = true
 	return route

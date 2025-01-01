@@ -1,33 +1,28 @@
 package puff
 
 import (
+	"fmt"
 	"mime/multipart"
-	"os"
+
+	"github.com/ThePuffProject/puff/openapi"
 )
 
+// File represents a file in Puff. WARNING: the Name field has not been sanitized.
 type File struct {
-	Name          string
-	Size          int64
-	MultipartFile multipart.File
+	multipart.File
+	Name string
+	Size int64
 }
 
-func (f *File) SaveTo(filepath ...string) (n int, err error) {
-	fp := ""
-	if len(filepath) == 0 {
-		fp = f.Name
-	} else {
-		fp = filepath[0]
-	}
-	data := make([]byte, f.Size)
-	_, err = f.MultipartFile.Read(data)
+func getFileParam(c *Context, p *openapi.Parameter) (*File, error) {
+	file, header, err := c.GetFormFile(p.Name)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("get file error: %v", err)
 	}
-	defer f.MultipartFile.Close()
-	file, err := os.OpenFile(fp, os.O_CREATE|os.O_WRONLY, 0640)
-	if err != nil {
-		return 0, err
-	}
-	n, err = file.Write(data)
-	return
+	// FIXME: validate MIME
+	return &File{
+		File: file,
+		Name: header.Filename,
+		Size: header.Size,
+	}, nil
 }

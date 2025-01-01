@@ -9,7 +9,7 @@ import (
 var SwaggerHTML string
 var Schemas = make(SchemaDefinition)
 
-func parameterToRequestBodyOrReference(p Parameter) RequestBodyOrReference {
+func ParameterAsRequestBody(p Parameter) RequestBodyOrReference {
 	m := make(map[string]MediaType)
 	s := p.Schema
 
@@ -27,6 +27,17 @@ func parameterToRequestBodyOrReference(p Parameter) RequestBodyOrReference {
 		Required:    p.Required,
 	}
 	return requestBody
+}
+
+// GenerateDefinitions is a helper function that takes a list of Paths and generates the OpenAPI schema for each path.
+func GenerateDefinitions(paths Paths) map[string]*Schema {
+	definitions := map[string]*Schema{}
+	for _, p := range paths {
+		for _, routeParams := range *p.Parameters {
+			definitions[routeParams.Name] = routeParams.Schema
+		}
+	}
+	return definitions
 }
 
 // func addRoute(route *puff.Route, tags *[]Tag, tagNames *[]string, paths *Paths) *Paths {
@@ -49,7 +60,7 @@ func parameterToRequestBodyOrReference(p Parameter) RequestBodyOrReference {
 // 			requestBody = RequestBodyOrReference{
 // 				Content: map[string]MediaType{
 // 					"multipart/form-data": {
-// 						Schema: &Schema{
+// 						Schema: &openapi.Schema{
 // 							Type:     "object",
 // 							Required: []string{p.Name},
 // 							Properties: map[string]*Schema{
@@ -64,7 +75,7 @@ func parameterToRequestBodyOrReference(p Parameter) RequestBodyOrReference {
 // 			}
 // 			continue
 // 		}
-// 		np := Parameter{
+// 		np := openapi.Parameter{
 // 			Name:        p.Name,
 // 			Description: p.Description,
 // 			Required:    p.Required,

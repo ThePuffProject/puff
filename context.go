@@ -2,6 +2,7 @@ package puff
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
@@ -23,9 +24,13 @@ type Context struct {
 	// WebSocket will be nil if the route does not use websockets.
 	WebSocket *websocket.Conn
 
-	// LoggerConfig
+	// LoggerConfig is the configuration of the logger in Puff.
 	LoggerConfig LoggerConfig
-	statusCode   int
+
+	// body is a stored slice of the body.
+	body []byte
+
+	statusCode int
 }
 
 func NewContext(w http.ResponseWriter, r *http.Request, a *PuffApp) *Context {
@@ -34,10 +39,6 @@ func NewContext(w http.ResponseWriter, r *http.Request, a *PuffApp) *Context {
 		ResponseWriter: w,
 		registry:       make(map[string]any), // prevents assignment to nil map
 		LoggerConfig:   *a.Config.LoggerConfig,
-		// GetBody: sync.OnceValues(func() ([]byte, error) {
-		// 	defer r.Body.Close()
-		// 	return io.ReadAll(r.Body)
-		// }),
 	}
 }
 
@@ -45,6 +46,19 @@ func (ctx *Context) isWebSocket() bool {
 	return ctx.GetRequestHeader("Upgrade") == "websocket" &&
 		ctx.GetRequestHeader("Connection") == "Upgrade" &&
 		ctx.GetRequestHeader("Sec-WebSocket-Version") == "13"
+}
+
+// GetBody retrieves the body from the request. This function may be called
+// multiple times.
+func (ctx *Context) GetBody() ([]byte, error) {
+	if ctx.body == nil {
+		b, err := io.ReadAll(ctx.Request.Body)
+		if err != nil {
+			return nil, err
+		}
+		ctx.body = b
+	}
+	return ctx.body, nil
 }
 
 // Get gets a value from Context with the key passed in.
