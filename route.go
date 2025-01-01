@@ -46,7 +46,8 @@ func (route *Route) getCompletePath() {
 }
 
 func (route *Route) createRegexMatch() {
-	escapedPath := strings.ReplaceAll(route.fullPath, "/", "\\/")
+	// protect special characters in the path
+	escapedPath := regexp.QuoteMeta(route.fullPath)
 	regexPattern := regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(escapedPath, "([^/]+)")
 	route.regexp = regexp.MustCompile("^" + regexPattern + "$")
 }

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"strings"
 )
 
 type PuffApp struct {
@@ -21,6 +22,9 @@ type PuffApp struct {
 // Add a Router to the main app.
 // Under the hood attaches the router to the App's RootRouter
 func (a *PuffApp) IncludeRouter(r *Router) {
+	if !strings.HasPrefix(r.Prefix, "/") {
+		panic("Puff Routers must have a / prefix")
+	}
 	r.puff = a
 	a.RootRouter.IncludeRouter(r)
 }
