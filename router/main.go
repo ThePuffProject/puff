@@ -47,7 +47,6 @@ func (r *Router) AddRoute(path string, handler http.HandlerFunc) {
 
 	for _, newRouteSegment := range newRouteSegments {
 		found := false
-		fmt.Println("what is current", r.rootNode)
 		for _, childNode := range current.children {
 			if childNode.prefix == newRouteSegment {
 				current = childNode
@@ -119,9 +118,9 @@ func (r *Router) Mount(prefix string, subRouter *Router) {
 			}
 		}
 		if !found {
-			newNode := &node{prefix: part, parent: current, children: []*node{}}
-			current.children = append(current.children, newNode)
-			current = newNode
+			subRouter.rootNode.parent = current
+			subRouter.rootNode.prefix = prefix[1:] // strip /
+			current.children = append(current.children, subRouter.rootNode)
 		}
 	}
 
@@ -160,7 +159,7 @@ func main() {
 	usersRouter := NewRouter("Users")
 	cheeseRouter := NewRouter("Cheese")
 
-	usersRouter.AddRoute("/", func(w http.ResponseWriter, r *http.Request) {
+	usersRouter.AddRoute("/root", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Users Root")
 	})
 
