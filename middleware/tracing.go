@@ -26,15 +26,15 @@ var DefaultTracingConfig TracingConfig = TracingConfig{
 // createCSRFMiddleware is used to create a CSRF middleware with a config.
 func createTracingMiddleware(tc TracingConfig) puff.Middleware {
 	return func(next puff.HandlerFunc) puff.HandlerFunc {
-		return func(c *puff.Context) {
+		return func(c *puff.Context, f any) {
 			if tc.Skip != nil && tc.Skip(c) {
-				next(c)
+				next(c, f)
 				return
 			}
 			id := tc.IDGenerator()
 			c.SetResponseHeader(tc.TracerName, id)
 			c.Set(tc.TracerName, id)
-			next(c)
+			next(c, f)
 		}
 	}
 }

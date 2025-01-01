@@ -14,8 +14,10 @@ func ResponseType[T any]() reflect.Type {
 	return reflect.TypeOf(new(T)).Elem()
 }
 
+type StatusCode int
+
 // Responses type maps together the HTTPStatusCode with a function returning the reflect.Type
-type Responses = map[int]func() reflect.Type
+type Responses = map[StatusCode]func() reflect.Type
 
 // ResponseDefinition represents a definition of a response for a specific HTTP status code.
 // It is used to map an HTTP status code to the corresponding response type for a route.
@@ -26,7 +28,7 @@ type Responses = map[int]func() reflect.Type
 //   - ResponseType: The Go type that defines the response body (e.g., a struct). This type is used to generate
 //     the corresponding Swagger schema. The type should not be an instance; just the a function returning reflect.Type (e.g., `puff.ResponseType[Pizza]`).
 type ResponseDefinition struct {
-	StatusCode   int
+	StatusCode   StatusCode
 	ResponseType func() reflect.Type
 }
 
@@ -47,7 +49,7 @@ type ResponseDefinition struct {
 //
 // Returns:
 // - A ResponseDefinition that maps the provided status code to the response type.
-func DefineResponse(statusCode int, ResponseType func() reflect.Type) ResponseDefinition {
+func DefineResponse(statusCode StatusCode, ResponseType func() reflect.Type) ResponseDefinition {
 	return ResponseDefinition{
 		StatusCode:   statusCode,
 		ResponseType: ResponseType,

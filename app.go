@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"reflect"
+
+	"github.com/ThePuffProject/puff/openapi"
 )
 
 type PuffApp struct {
 	// Config is the underlying application configuration.
 	Config *AppConfig
-	// RootRouter is the application's default router.
-	RootRouter *Router
+	// Router is the root of the application's routing tree.
+	Router *Router
 
 	// Server is the http.Server that will be used to serve requests.
 	Server *http.Server
@@ -21,8 +22,8 @@ type PuffApp struct {
 // Add a Router to the main app.
 // Under the hood attaches the router to the App's RootRouter
 func (a *PuffApp) IncludeRouter(r *Router) {
-	r.puff = a
-	a.RootRouter.IncludeRouter(r)
+	r.puffapp = a
+	a.Router.IncludeRouter(r)
 }
 
 // Use registers a middleware function to be used by the root router of the PuffApp.
@@ -31,59 +32,91 @@ func (a *PuffApp) IncludeRouter(r *Router) {
 // Parameters:
 // - m: Middleware function to be added.
 func (a *PuffApp) Use(m Middleware) {
-	a.RootRouter.Middlewares = append(a.RootRouter.Middlewares, &m)
+	a.Router.Middlewares = append(a.Router.Middlewares, &m)
 }
 
-// addOpenAPIRoutes adds routes to serve OpenAPI documentation for the PuffApp.
-// If a DocsURL is specified, the function sets up two routes:
-// 1. A route to provide the OpenAPI spec as JSON.
-// 2. A route to render the OpenAPI documentation in a user-friendly UI.
-//
-// This method will not add any routes if DocsURL is empty.
-//
-// Errors during spec generation are logged, and the method will exit early if any occur.
-func (a *PuffApp) addOpenAPIRoutes() {
+// handleOpenAPI handles all OpenAPI generation and routing.
+func (a *PuffApp) handleOpenAPI() error {
 	if a.Config.DisableOpenAPIGeneration {
-		return
+		return nil
 	}
-	a.GenerateOpenAPISpec()
-	docsRouter := Router{
-		Prefix: a.Config.DocsURL,
-		Name:   "OpenAPI Documentation Router",
-	}
+	a.generateOpenAPISpec()
 
-	// Provides JSON OpenAPI Schema.
-	docsRouter.Get(".json", nil, func(c *Context) {
-		res := JSONResponse{
+	docsRouter := NewRouter(fmt.Sprintf("Swagger Documentation for %s", a.Config.Name), a.Config.DocsURL)
+
+	// Swagger Page
+	r := Get(docsRouter, "", func(ctx *Context, _ *NoFields) {
+		ctx.SendResponse(HTMLResponse{
+			StatusCode: 200,
+			Template:   openapi.SwaggerHTML,
+			Data:       a.Config.SwaggerUIConfig,
+		})
+	})
+	r.FullPath()
+	r.regexp, _ = r.createRegexMatch()
+
+	// OpenAPI JSON
+	r = Get(docsRouter, ".json", func(ctx *Context, _ *NoFields) {
+		ctx.SendResponse(JSONResponse{
 			StatusCode: 200,
 			Content:    a.Config.OpenAPI,
-		}
-
-		c.SendResponse(res)
+		})
 	})
+	r.FullPath()
+	r.regexp, _ = r.createRegexMatch()
 
-	// Renders OpenAPI schema.
-	docsRouter.Get("", nil, func(c *Context) {
-		if a.Config.SwaggerUIConfig == nil {
-
-			swaggerConfig := SwaggerUIConfig{
-				Title:           a.Config.Name,
-				URL:             a.Config.DocsURL + ".json",
-				Theme:           "obsidian",
-				Filter:          true,
-				RequestDuration: false,
-				FaviconURL:      "https://fav.farm/💨",
-			}
-			a.Config.SwaggerUIConfig = &swaggerConfig
-		}
-		res := HTMLResponse{
-			Template: openAPIHTML, Data: a.Config.SwaggerUIConfig,
-		}
-		c.SendResponse(res)
-	})
-
-	a.IncludeRouter(&docsRouter)
+	a.IncludeRouter(docsRouter)
+	return nil
 }
+
+// // addOpenAPIRoutes adds routes to serve OpenAPI documentation for the PuffApp.
+// // If a DocsURL is specified, the function sets up two routes:
+// // 1. A route to provide the OpenAPI spec as JSON.
+// // 2. A route to render the OpenAPI documentation in a user-friendly UI.
+// //
+// // This method will not add any routes if DocsURL is empty.
+// //
+// // Errors during spec generation are logged, and the method will exit early if any occur.
+// func (a *PuffApp) addOpenAPIRoutes() {
+// 	if a.Config.DisableOpenAPIGeneration {
+// 		return
+// 	}
+// 	a.GenerateOpenAPISpec()
+// 	docsRouter := &Router{
+// 		Prefix: a.Config.DocsURL,
+// 		Name:   "OpenAPI Documentation Router",
+// 	}
+
+// 	// Provides JSON OpenAPI Schema.
+// 	Get(docsRouter, ".json", func(c *Context, _ *NoFields) {
+// 		res := JSONResponse{
+// 			StatusCode: 200,
+// 			Content:    a.Config.OpenAPI,
+// 		}
+// 		c.SendResponse(res)
+// 	})
+
+// 	// Renders OpenAPI schema.
+// 	Get(docsRouter, "", func(c *Context, _ *NoFields) {
+// 		if a.Config.SwaggerUIConfig == nil {
+// 			swaggerConfig := SwaggerUIConfig{
+// 				Title:           a.Config.Name,
+// 				URL:             a.Config.DocsURL + ".json",
+// 				Theme:           "obsidian",
+// 				Filter:          true,
+// 				RequestDuration: false,
+// 				FaviconURL:      "https://fav.farm/💨",
+// 			}
+// 			a.Config.SwaggerUIConfig = &swaggerConfig
+// 		}
+// 		res := HTMLResponse{
+// 			Template: openAPIHTML, Data: a.Config.SwaggerUIConfig,
+// 		}
+// 		c.SendResponse(res)
+// 	})
+
+// 	a.IncludeRouter(docsRouter)
+// }
 
 // attachMiddlewares recursively applies middlewares to all routes within a router.
 // This function traverses through the router's sub-routers and routes, applying the
@@ -111,11 +144,11 @@ func attachMiddlewares(middleware_combo *[]Middleware, router *Router) {
 // of the PuffApp. It also patches the routes of each router to ensure they have been
 // processed for middlewares.
 func (a *PuffApp) patchAllRoutes() {
-	a.RootRouter.patchRoutes()
-	for _, r := range a.RootRouter.Routers {
+	a.Router.patchRoutes()
+	for _, r := range a.Router.Routers {
 		r.patchRoutes()
 	}
-	attachMiddlewares(&[]Middleware{}, a.RootRouter)
+	attachMiddlewares(&[]Middleware{}, a.Router)
 }
 
 // ListenAndServe starts the PuffApp server on the specified address.
@@ -128,9 +161,8 @@ func (a *PuffApp) patchAllRoutes() {
 // Parameters:
 // - listenAddr: The address the server will listen on (e.g., ":8080").
 func (a *PuffApp) ListenAndServe(listenAddr string) error {
-
 	a.patchAllRoutes()
-	a.addOpenAPIRoutes()
+	a.handleOpenAPI()
 
 	slog.Debug(fmt.Sprintf("Running Puff 💨 on %s", listenAddr))
 	slog.Debug(fmt.Sprintf("Visit docs 💨 on %s", fmt.Sprintf("http://localhost%s%s", listenAddr, a.Config.DocsURL)))
@@ -138,7 +170,7 @@ func (a *PuffApp) ListenAndServe(listenAddr string) error {
 	if a.Server == nil {
 		a.Server = &http.Server{
 			Addr:    listenAddr,
-			Handler: a.RootRouter,
+			Handler: a.Router,
 		}
 	}
 
@@ -152,78 +184,17 @@ func (a *PuffApp) ListenAndServe(listenAddr string) error {
 	return err
 }
 
-// Get registers an HTTP GET route in the PuffApp's root router.
-//
-// Parameters:
-// - path: The URL path of the route.
-// - fields: Optional fields associated with the route.
-// - handleFunc: The handler function that will be executed when the route is accessed.
-func (a *PuffApp) Get(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Get(path, fields, handleFunc)
-}
-
-// Post registers an HTTP POST route in the PuffApp's root router.
-//
-// Parameters:
-// - path: The URL path of the route.
-// - fields: Optional fields associated with the route.
-// - handleFunc: The handler function that will be executed when the route is accessed.
-func (a *PuffApp) Post(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Post(path, fields, handleFunc)
-}
-
-// Patch registers an HTTP PATCH route in the PuffApp's root router.
-//
-// Parameters:
-// - path: The URL path of the route.
-// - fields: Optional fields associated with the route.
-// - handleFunc: The handler function that will be executed when the route is accessed.
-func (a *PuffApp) Patch(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Patch(path, fields, handleFunc)
-}
-
-// Put registers an HTTP PUT route in the PuffApp's root router.
-//
-// Parameters:
-// - path: The URL path of the route.
-// - fields: Optional fields associated with the route.
-// - handleFunc: The handler function that will be executed when the route is accessed.
-func (a *PuffApp) Put(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Put(path, fields, handleFunc)
-}
-
-// Delete registers an HTTP DELETE route in the PuffApp's root router.
-//
-// Parameters:
-// - path: The URL path of the route.
-// - fields: Optional fields associated with the route.
-// - handleFunc: The handler function that will be executed when the route is accessed.
-func (a *PuffApp) Delete(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Delete(path, fields, handleFunc)
-}
-
-// WebSocket registers a WebSocket route in the PuffApp's root router.
-// This route allows the server to handle WebSocket connections at the specified path.
-//
-// Parameters:
-// - path: The URL path of the WebSocket route.
-// - fields: Optional fields associated with the route.
-// - handleFunc: The handler function to handle WebSocket connections.
-func (a *PuffApp) WebSocket(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.WebSocket(path, fields, handleFunc)
-}
-
 // AllRoutes returns all routes registered in the PuffApp, including those in sub-routers.
 // This function provides an aggregated view of all routes in the application.
 func (a *PuffApp) AllRoutes() []*Route {
-	return a.RootRouter.AllRoutes()
+	return a.Router.AllRoutes()
 }
 
 // GenerateOpenAPISpec is responsible for taking the PuffApp configuration and turning it into an OpenAPI json.
-func (a *PuffApp) GenerateOpenAPISpec() {
-	if reflect.ValueOf(a.Config.OpenAPI).IsZero() {
-		a.Config.OpenAPI = NewOpenAPI(a)
-		paths, tags := a.GeneratePathsTags()
+func (a *PuffApp) generateOpenAPISpec() {
+	if a.Config.OpenAPI == nil { // keep the OpenAPI spec if specified by the user prior
+		a.Config.OpenAPI = openapi.NewOpenAPI(a.Config.Name, a.Config.Version)
+		paths, tags := a.generatePathsTags()
 		a.Config.OpenAPI.Tags = tags
 		a.Config.OpenAPI.Paths = paths
 	}
@@ -231,30 +202,18 @@ func (a *PuffApp) GenerateOpenAPISpec() {
 
 // GeneratePathsTags is a helper function to auto-define OpenAPI tags and paths if you would like to customize OpenAPI schema.
 // Returns (paths, tags) to populate the 'Paths' and 'Tags' attribute of OpenAPI
-func (a *PuffApp) GeneratePathsTags() (*Paths, *[]Tag) {
-	tags := []Tag{}
-	tagNames := []string{}
-	var paths = make(Paths)
-	for _, route := range a.RootRouter.Routes {
-		addRoute(route, &tags, &tagNames, &paths)
+func (a *PuffApp) generatePathsTags() (*openapi.Paths, *[]openapi.Tag) {
+	tags := []openapi.Tag{}
+	var paths = make(openapi.Paths)
+	for _, route := range a.Router.Routes {
+		route.addRouteToPaths(paths)
 	}
-	for _, router := range a.RootRouter.Routers {
+	for _, router := range a.Router.Routers {
 		for _, route := range router.Routes {
-			addRoute(route, &tags, &tagNames, &paths)
+			route.addRouteToPaths(paths)
 		}
 	}
 	return &paths, &tags
-}
-
-// GenerateDefinitions is a helper function that takes a list of Paths and generates the OpenAPI schema for each path.
-func (a *PuffApp) GenerateDefinitions(paths Paths) map[string]*Schema {
-	definitions := map[string]*Schema{}
-	for _, p := range paths {
-		for _, routeParams := range *p.Parameters {
-			definitions[routeParams.Name] = routeParams.Schema
-		}
-	}
-	return definitions
 }
 
 // Shutdown calls shutdown on the underlying server with a non-nil empty context.

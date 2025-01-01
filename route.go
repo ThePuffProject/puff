@@ -1,23 +1,28 @@
 package puff
 
 import (
+	"encoding/hex"
 	"fmt"
 	"maps"
+	"net/http"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/ThePuffProject/puff/openapi"
 )
 
 type Route struct {
 	fullPath    string
 	regexp      *regexp.Regexp
-	params      []Parameter
+	params      []openapi.Parameter
 	Description string
 	WebSocket   bool
 	Protocol    string
 	Path        string
-	Handler     func(*Context)
-	Fields      any
+	Handler     func(*Context, any)
+	fieldsType  reflect.Type
 	// Router points to the router the route belongs to. Will always be the closest router in the tree.
 	Router *Router
 	// Responses are the schemas associated with a specific route. Have preference over parent router defined routes.
@@ -29,110 +34,164 @@ func (r *Route) String() string {
 	return fmt.Sprintf("Protocol: %s\nPath: %s\n", r.Protocol, r.Path)
 }
 
-func (r *Route) GetFullPath() string {
+// FullPath returns the full path of the route with all parent prefixes. If
+// the full path has not been created yet, it will be created.
+func (r *Route) FullPath() string {
+	if r.fullPath != "" {
+		return r.fullPath
+	}
+	r.fullPath = r.generateCompletePath()
 	return r.fullPath
 }
 
-func (route *Route) getCompletePath() {
+// getCompletePath generates a full path by appending prefixes.
+func (route *Route) generateCompletePath() string {
 	var parts []string
-	currentRouter := route.Router
-	for currentRouter != nil {
-		parts = append([]string{currentRouter.Prefix}, parts...)
-		currentRouter = currentRouter.parent
+
+	router := route.Router
+
+	for router != nil {
+		parts = append([]string{router.Prefix}, parts...) // append parent prefix to the start
+		router = router.parent                            // keep climbing up the tree
 	}
 
-	parts = append(parts, route.Path)
-	route.fullPath = strings.Join(parts, "")
+	parts = append(parts, route.Path) // add all the parts into the slice
+	return strings.Join(parts, "")
 }
 
-func (route *Route) createRegexMatch() {
+// createRegexMatch creates the regular expression for matches.
+func (route *Route) createRegexMatch() (*regexp.Regexp, error) {
+	// /api/route -> \/api\/route (to escape regexp)
 	escapedPath := strings.ReplaceAll(route.fullPath, "/", "\\/")
-	regexPattern := regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(escapedPath, "([^/]+)")
-	route.regexp = regexp.MustCompile("^" + regexPattern + "$")
+
+	regexpattern, err := regexp.Compile(`\{[^}]+\}`)
+	if err != nil {
+		return nil, err
+	}
+	pattern := regexpattern.ReplaceAllString(escapedPath, "([^/]+)")
+
+	matchregex, err := regexp.Compile("^" + pattern + "$")
+	if err != nil {
+		return nil, err
+	}
+
+	return matchregex, nil
 }
 
-func (route *Route) handleInputSchema() error { // should this return an error or should it panic?
-	if route.Fields == nil {
-		route.params = []Parameter{}
-		return nil
-	}
-	sv := reflect.ValueOf(route.Fields) //
-	svk := sv.Kind()
-	if svk != reflect.Ptr {
-		return fmt.Errorf("fields must be POINTER to struct")
-	}
-	sve := sv.Elem()
-	svet := sve.Type()
-	if sve.Kind() != reflect.Struct {
-		return fmt.Errorf("fields must be pointer to STRUCT")
-	}
+// operationID returns a unique operationID for the OpenAPI operation. The value of the
+// string returned will always be the same, as it is created using the HTTP method and full
+// path of the route.
+func (r *Route) operationID() string {
+	return hex.EncodeToString([]byte(r.Protocol + r.fullPath))
+}
 
-	newParams := []Parameter{}
-	for i := range svet.NumField() {
-		newParam := Parameter{}
-		svetf := svet.Field(i)
-
-		name := svetf.Tag.Get("name")
-		if name == "" {
-			name = svetf.Name
-		}
-
-		// param.Schema
-		newParam.Schema = newDefinition(route, sve.Field(i).Interface())
-
-		//param.In
-		specified_kind := svetf.Tag.Get("kind") //ref: Parameters object/In
-		if name == "Body" && specified_kind == "" {
-			specified_kind = "body"
-		}
-		if !isValidKind(specified_kind) {
-			return fmt.Errorf("specified kind on field %s in struct tag must be header, path, query, cookie, body, or formdata", svetf.Name)
-		}
-
-		//param.Description
-		description := svetf.Tag.Get("description")
-
-		//param.Required
-		specified_required := svetf.Tag.Get("required")
-		specified_deprecated := svetf.Tag.Get("deprecated")
-
-		required_def := true
-		if specified_kind == "cookie" { // cookies by default should never be required
-			required_def = false
-		}
-
-		required, err := resolveBool(specified_required, required_def)
+func (r *Route) openAPIResponses() (map[string]openapi.OpenAPIResponse, error) {
+	openAPIResponses := map[string]openapi.OpenAPIResponse{}
+	for statusCode, res := range r.Responses {
+		sc := strconv.Itoa(int(statusCode))
+		schema, err := newSchemaDefinition(res())
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("getting schema definition for response with status code %d encountered an error: %v", statusCode, err)
 		}
-		deprecated, err := resolveBool(specified_deprecated, false)
-		if err != nil {
-			return err
+		openAPIResponses[sc] = openapi.OpenAPIResponse{
+			Content: map[string]openapi.MediaType{
+				"application/json": {Schema: schema},
+			},
 		}
-
-		//param.Schema.format
-		format := svetf.Tag.Get("format")
-		if format != "" {
-			newParam.Schema.Format = format
-		}
-
-		newParam.Name = name
-		newParam.In = specified_kind
-		newParam.Description = description
-		newParam.Required = required
-		newParam.Deprecated = deprecated
-
-		newParams = append(newParams, newParam)
 	}
-	route.params = newParams
+	return openAPIResponses, nil
+}
+
+// FIXME: tags shouldn't have to rely on the router's tag
+func (r *Route) addRouteToPaths(paths openapi.Paths) error {
+	var err error
+
+	op := new(openapi.Operation)
+	// op.Summary
+	if len(r.Description) > 100 {
+		op.Summary = r.Description[:98] + "..."
+	} else {
+		op.Summary = r.Description
+	}
+
+	// operationID, tags, description, callbacks
+	op.OperationID = r.operationID()
+	op.Tags = []string{r.Router.Tag}
+	op.Description = r.Description
+	op.Callbacks = make(map[string]openapi.Callback)
+
+	// responses
+	op.Responses, err = r.openAPIResponses()
+	if err != nil {
+		return fmt.Errorf("error generating paths from route: %v", err)
+	}
+
+	parameters := []openapi.Parameter{}
+	var requestbody openapi.RequestBodyOrReference
+	for _, p := range r.params {
+		if p.In == "body" {
+			requestbody = openapi.ParameterAsRequestBody(p)
+			continue
+		}
+		if p.In == "file" {
+			requestbody = openapi.RequestBodyOrReference{
+				Content: map[string]openapi.MediaType{
+					"multipart/form-data": {
+						Schema: &openapi.Schema{
+							Type:     "object",
+							Required: []string{p.Name},
+							Properties: map[string]*openapi.Schema{
+								p.Name: {
+									Type:   "string",
+									Format: "binary",
+								},
+							},
+						},
+					},
+				},
+			}
+			continue
+		}
+		// not body or file parameter
+		np := openapi.Parameter{
+
+			Name:        p.Name,
+			Description: p.Description,
+			Required:    p.Required,
+			In:          p.In,
+			Deprecated:  p.Deprecated,
+		}
+		np.Schema = p.Schema
+		parameters = append(parameters, np)
+	}
+
+	op.Parameters = parameters
+	op.RequestBody = &requestbody
+
+	path := paths[r.fullPath]
+	switch r.Protocol {
+	// TODO: handle other protocols
+	case http.MethodGet:
+		path.Get = op
+		path.Get.RequestBody = nil
+	case http.MethodPost:
+		path.Post = op
+	case http.MethodPut:
+		path.Put = op
+	case http.MethodPatch:
+		path.Patch = op
+	case http.MethodDelete:
+		path.Delete = op
+	}
+	paths[r.fullPath] = path
 	return nil
 }
 
 // GenerateResponses is responsible for generating the 'responses' attribute in the OpenAPI schema.
-// Since responses can be specified at multiple levels, responses at the route level will be given the most specificity.
-func (r *Route) GenerateResponses() {
-
-	if r.Router.puff.Config.DocsURL == "" {
+// Since responses can be specified at multiple levels, responses at the route level will be given
+// the most specificity.
+func (r *Route) generateResponses() {
+	if r.Router.puffapp.Config.DocsURL == "" {
 		// if swagger documentation is off, we will not set responses
 		return
 	}
@@ -169,7 +228,7 @@ func (r *Route) GenerateResponses() {
 //
 // Returns:
 // - The updated Route object to allow method chaining.
-func (r *Route) WithResponse(statusCode int, ResponseTypeFunc func() reflect.Type) *Route {
+func (r *Route) WithResponse(statusCode StatusCode, ResponseTypeFunc func() reflect.Type) *Route {
 	r.Responses[statusCode] = ResponseTypeFunc
 	return r
 }

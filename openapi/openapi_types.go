@@ -1,34 +1,31 @@
-package puff
+package openapi
 
 // OpenAPI struct represents the root of the OpenAPI document.
 type OpenAPI struct {
-	SpecVersion       string                 `json:"openapi"`
-	Info              *Info                  `json:"info"`
-	JSONSchemaDialect string                 `json:"jsonSchemaDialect"`
-	Servers           *[]Server              `json:"servers"`
-	Paths             *Paths                 `json:"paths"`
-	Webhooks          map[string]any         `json:"webhooks"`
-	Components        *Components            `json:"components"`
-	Security          *[]SecurityRequirement `json:"security"`
-	Tags              *[]Tag                 `json:"tags"`
-	ExternalDocs      *ExternalDocumentation `json:"externalDocs"`
+	SpecVersion  string                 `json:"openapi"`
+	Info         *Info                  `json:"info"`
+	Servers      *[]Server              `json:"servers"`
+	Paths        *Paths                 `json:"paths"`
+	Components   *Components            `json:"components"`
+	Security     *[]SecurityRequirement `json:"security"`
+	Tags         *[]Tag                 `json:"tags"`
+	ExternalDocs *ExternalDocumentation `json:"externalDocs"`
 	// schemas holds the openAPI schemas generated
 	schemas *SchemaDefinition
 }
 
-func NewOpenAPI(a *PuffApp) *OpenAPI {
+func NewOpenAPI(name string, version string) *OpenAPI {
 	o := &OpenAPI{
 		SpecVersion: "3.1.0",
 		Info: &Info{
-			Title:   a.Config.Name,
-			Version: a.Config.Version,
+			Title:   name,
+			Version: version,
 			Contact: &Contact{},
 			License: &License{},
 		},
 		Servers:      &[]Server{},
 		Paths:        new(Paths),
-		Components:   NewComponents(a),
-		Webhooks:     make(map[string]any),
+		Components:   NewComponents(),
 		Security:     &[]SecurityRequirement{},
 		Tags:         &[]Tag{},
 		ExternalDocs: &ExternalDocumentation{},
@@ -53,8 +50,7 @@ type Property struct {
 
 // Info struct provides metadata about the API.
 type Info struct {
-	Title   string `json:"title"`
-	Summary string `json:"summary"`
+	Title string `json:"title"`
 	// Description is an html string that describes the API service. Do *NOT* include <Doctype> or <html> tags.
 	Description    string   `json:"description"`
 	TermsOfService string   `json:"termsOfService"`
@@ -98,7 +94,7 @@ type Components struct {
 	PathItems       map[string]any    `json:"pathItems,omitempty"`
 }
 
-func NewComponents(a *PuffApp) *Components {
+func NewComponents() *Components {
 	return &Components{
 		Schemas:         &Schemas,
 		Responses:       make(map[string]any),
@@ -167,11 +163,10 @@ type Parameter struct {
 	In              string  `json:"in"`
 	Description     string  `json:"description"`
 	Required        bool    `json:"required"`
-	Type            string  `json:"type"`
 	Deprecated      bool    `json:"deprecated"`
-	AllowEmptyValue bool    `json:"allowEmptyValue"`
-	Style           string  `json:"style"`
-	Explode         bool    `json:"explode"`
+	AllowEmptyValue bool    `json:"allowEmptyValue,omitempty"`
+	Style           string  `json:"style,omitempty"`
+	Explode         bool    `json:"explode,omitempty"`
 	AllowReserved   bool    `json:"allowReserved"`
 	Schema          *Schema `json:"schema"`
 }
@@ -204,7 +199,7 @@ type Schema struct {
 	Properties           map[string]*Schema `json:"properties,omitempty"`
 	AdditionalProperties *Schema            `json:"additionalProperties,omitempty"`
 	Required             []string           `json:"required,omitempty"`
-	Examples             []any              `json:"examples,omitempty"`
+	Examples             map[string]Example `json:"examples,omitempty"`
 }
 
 // OpenAPIResponse struct describes possible responses in OpenAPI.

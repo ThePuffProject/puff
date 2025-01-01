@@ -24,9 +24,13 @@ type Context struct {
 	// WebSocket will be nil if the route does not use websockets.
 	WebSocket *websocket.Conn
 
-	// LoggerConfig
+	// LoggerConfig is the configuration of the logger in Puff.
 	LoggerConfig LoggerConfig
-	statusCode   int
+
+	// body is a stored slice of the body.
+	body []byte
+
+	statusCode int
 }
 
 func NewContext(w http.ResponseWriter, r *http.Request, a *PuffApp) *Context {
@@ -42,6 +46,19 @@ func (ctx *Context) isWebSocket() bool {
 	return ctx.GetRequestHeader("Upgrade") == "websocket" &&
 		ctx.GetRequestHeader("Connection") == "Upgrade" &&
 		ctx.GetRequestHeader("Sec-WebSocket-Version") == "13"
+}
+
+// GetBody retrieves the body from the request. This function may be called
+// multiple times.
+func (ctx *Context) GetBody() ([]byte, error) {
+	if ctx.body == nil {
+		b, err := io.ReadAll(ctx.Request.Body)
+		if err != nil {
+			return nil, err
+		}
+		ctx.body = b
+	}
+	return ctx.body, nil
 }
 
 // Get gets a value from Context with the key passed in.
@@ -70,12 +87,6 @@ func (ctx *Context) GetResponseHeader(k string) string {
 // SetResponseHeader sets the value of the response header k to v.
 func (ctx *Context) SetResponseHeader(k, v string) {
 	ctx.ResponseWriter.Header().Set(k, v)
-}
-
-// GetBody returns the request body.
-func (ctx *Context) GetBody() ([]byte, error) {
-	defer ctx.Request.Body.Close()
-	return io.ReadAll(ctx.Request.Body)
 }
 
 // GetQueryParam retrives the value of a query param from k.

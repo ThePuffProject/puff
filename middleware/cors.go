@@ -49,16 +49,16 @@ func createCORSMiddleware(c CORSConfig) puff.Middleware {
 	allowedHeaders := strings.Join(c.AllowedHeaders, ",")
 
 	return func(next puff.HandlerFunc) puff.HandlerFunc {
-		return func(ctx *puff.Context) {
+		return func(ctx *puff.Context, f any) {
 			if c.Skip != nil && c.Skip(ctx) {
-				next(ctx)
+				next(ctx, f)
 				return
 			}
 
 			ctx.SetResponseHeader("Access-Control-Allow-Origin", c.AllowedOrigin)
 			ctx.SetResponseHeader("Access-Control-Allow-Methods", allowedMethods)
 			ctx.SetResponseHeader("Access-Control-Allow-Headers", allowedHeaders)
-			next(ctx)
+			next(ctx, f)
 		}
 	}
 }

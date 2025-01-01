@@ -34,9 +34,9 @@ var DefaultCSRFMiddleware *CSRFMiddlewareConfig = &CSRFMiddlewareConfig{
 func createCSRFMiddleware(config *CSRFMiddlewareConfig) puff.Middleware {
 	cookie_name := "CSRFMiddlewareToken"
 	return func(next puff.HandlerFunc) puff.HandlerFunc {
-		return func(c *puff.Context) {
+		return func(c *puff.Context, f any) {
 			if config.Skip != nil && config.Skip(c) {
-				next(c)
+				next(c, f)
 				return
 			}
 			for _, m := range config.ProtectedMethods {
@@ -54,7 +54,7 @@ func createCSRFMiddleware(config *CSRFMiddlewareConfig) puff.Middleware {
 				})
 				break
 			}
-			next(c)
+			next(c, f)
 		}
 	}
 }
