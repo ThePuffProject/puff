@@ -16,24 +16,24 @@ func NewRouter(name string) *Router {
 }
 
 func (r *Router) AddRoute(path string, handler http.HandlerFunc) {
-	newRouteSegments := segmentPath(path)
+	segments := segmentPath(path)
 	current := r.rootNode
 
-	for _, newRouteSegment := range newRouteSegments {
+	for _, segment := range segments {
 		found := false
-		for _, childNode := range current.children {
-			if childNode.prefix == newRouteSegment {
-				current = childNode
+		for _, child := range current.children {
+			if child.prefix == segment && child.type_ == determineNodeType(segment) {
+				current = child
 				found = true
 				break
 			}
 		}
 		if !found {
 			newNode := &node{
-				prefix:   newRouteSegment,
+				prefix:   segment,
 				parent:   current,
 				children: []*node{},
-				type_:    determineNodeType(newRouteSegment),
+				type_:    determineNodeType(segment),
 			}
 			current.children = append(current.children, newNode)
 			// update pointer to continue adding segments to trie from here
@@ -47,35 +47,27 @@ func (r *Router) AddRoute(path string, handler http.HandlerFunc) {
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	segments := segmentPath(req.URL.Path)
 	current := r.rootNode
-
-	if len(segments) == 0 && current.handler != nil { // Handle root route directly
-		current.handler(w, req)
-		return
-	}
+	params := make(map[string]string)
 
 	for _, segment := range segments {
 		found := false
+
 		for _, child := range current.children {
-			// FIXME: why are we checking nodepathparam twice
-			// nodepathparam should be used only if tere is no match with current route.
-			if child.prefix == segment || child.type_ == nodePathParam {
-				if child.type_ == nodePathParam {
-					child.param = child.prefix[1:]
-				}
-				current = child
+			if child.prefix == segment {
+				// prefer static match when found and break loop.
 				found = true
+				current = child
 				break
+			} else if child.type_ == nodePathParam {
+				params[child.prefix[1:len(child.prefix)-1]] = segment
+				found = true
+				current = child
 			}
 		}
 		if !found {
 			http.NotFound(w, req)
 			return
 		}
-	}
-	// FIXME: what is this??!
-	// Check if we've landed on a mounted router's root *and it has children*
-	if current.children != nil && len(current.children) == 1 && current.children[0].parent == current {
-		current = current.children[0]
 	}
 
 	if current.handler != nil {
@@ -95,30 +87,29 @@ func (r *Router) Mount(prefix string, subRouter *Router) {
 
 	for _, part := range segments {
 		found := false
-		for _, childNode := range current.children {
-			if childNode.prefix == part {
-				current = childNode
+		for _, child := range current.children {
+			if child.prefix == part {
+				current = child
 				found = true
 				break
 			}
 		}
 		if !found {
-			fmt.Println("not found", part, "router", subRouter.name, prefix)
-			subRouter.rootNode.parent = current
-			subRouter.rootNode.prefix = prefix[1:] // strip '/'
-			current.children = append(current.children, subRouter.rootNode)
-
+			newNode := &node{
+				prefix:   part,
+				parent:   current,
+				children: []*node{},
+			}
+			current.children = append(current.children, newNode)
+			current = newNode
 		}
 	}
 
-	// fixme: what are we doing here??
-	// Crucial fix: Preserve the sub-router's original prefix
-	subRouter.rootNode.prefix = strings.TrimPrefix(subRouter.rootNode.prefix, "/")
-	if current.prefix != "" {
-		subRouter.rootNode.prefix = current.prefix + "/" + subRouter.rootNode.prefix
+	// copy over children from subRouter as well.
+	for _, child := range subRouter.rootNode.children {
+		child.parent = current
+		current.children = append(current.children, child)
 	}
-	subRouter.rootNode.parent = current
-	current.children = append(current.children, subRouter.rootNode)
 }
 
 func (r *Router) Visualize() {
@@ -159,7 +150,7 @@ func main() {
 		fmt.Fprintf(w, "User ID: %s\n", r.URL.Path)
 	})
 
-	usersRouter.AddRoute("/profile/:username", func(w http.ResponseWriter, r *http.Request) {
+	usersRouter.AddRoute("/profile/{username}", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "User Profile: %s\n", r.URL.Path)
 	})
 

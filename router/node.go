@@ -28,6 +28,26 @@ type node struct {
 	type_    nodeType
 }
 
+func (n *node) findChild(segment string, nodeType nodeType) *node {
+	for _, child := range n.children {
+		if child.prefix == segment && child.type_ == nodeType {
+			return child
+		}
+	}
+	return nil
+}
+
+func (n *node) addChild(prefix string) *node {
+	newNode := &node{
+		prefix:   prefix,
+		parent:   n,
+		type_:    determineNodeType(prefix),
+		children: []*node{},
+	}
+	n.children = append(n.children, newNode)
+	return newNode
+}
+
 // utils for working with node
 func isParam(prefix string) bool {
 	if len(prefix) == 0 {
