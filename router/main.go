@@ -6,32 +6,6 @@ import (
 	"strings"
 )
 
-type nodeType int8
-
-const (
-	// nodePrefix denotes a 'normal' node. e.g 'api' in /api/users
-	nodePrefix nodeType = iota
-
-	// nodePathParam denotes a node representating a path param. e.g 'id' in /api/users/:id
-	nodePathParam
-
-	// nodeAny represents wildcard '*'
-	nodeAny
-)
-
-type node struct {
-	// prefix is the value of the node
-	prefix string
-
-	handler http.HandlerFunc
-
-	// direct ascendant of node
-	parent   *node
-	children []*node
-	param    string
-	type_    nodeType
-}
-
 type Router struct {
 	rootNode *node
 	name     string
@@ -55,8 +29,14 @@ func (r *Router) AddRoute(path string, handler http.HandlerFunc) {
 			}
 		}
 		if !found {
-			newNode := &node{prefix: newRouteSegment, parent: current, children: []*node{}}
+			newNode := &node{
+				prefix:   newRouteSegment,
+				parent:   current,
+				children: []*node{},
+				type_:    determineNodeType(newRouteSegment),
+			}
 			current.children = append(current.children, newNode)
+			// update pointer to continue adding segments to trie from here
 			current = newNode
 		}
 	}
@@ -65,8 +45,7 @@ func (r *Router) AddRoute(path string, handler http.HandlerFunc) {
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	path := req.URL.Path
-	segments := segmentPath(path)
+	segments := segmentPath(req.URL.Path)
 	current := r.rootNode
 
 	if len(segments) == 0 && current.handler != nil { // Handle root route directly
@@ -77,8 +56,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	for _, segment := range segments {
 		found := false
 		for _, child := range current.children {
-			if child.prefix == segment || child.isParam() {
-				if child.isParam() {
+			// FIXME: why are we checking nodepathparam twice
+			// nodepathparam should be used only if tere is no match with current route.
+			if child.prefix == segment || child.type_ == nodePathParam {
+				if child.type_ == nodePathParam {
 					child.param = child.prefix[1:]
 				}
 				current = child
@@ -91,7 +72,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-
+	// FIXME: what is this??!
 	// Check if we've landed on a mounted router's root *and it has children*
 	if current.children != nil && len(current.children) == 1 && current.children[0].parent == current {
 		current = current.children[0]
@@ -105,6 +86,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) Mount(prefix string, subRouter *Router) {
+	if len(prefix) == 0 || prefix[0] != '/' {
+		panic("Route prefix should not be an empty string and must start with '/'")
+	}
+
 	segments := segmentPath(prefix)
 	current := r.rootNode
 
@@ -118,12 +103,15 @@ func (r *Router) Mount(prefix string, subRouter *Router) {
 			}
 		}
 		if !found {
+			fmt.Println("not found", part, "router", subRouter.name, prefix)
 			subRouter.rootNode.parent = current
-			subRouter.rootNode.prefix = prefix[1:] // strip /
+			subRouter.rootNode.prefix = prefix[1:] // strip '/'
 			current.children = append(current.children, subRouter.rootNode)
+
 		}
 	}
 
+	// fixme: what are we doing here??
 	// Crucial fix: Preserve the sub-router's original prefix
 	subRouter.rootNode.prefix = strings.TrimPrefix(subRouter.rootNode.prefix, "/")
 	if current.prefix != "" {
@@ -167,7 +155,7 @@ func main() {
 		fmt.Fprintln(w, "blue cheese")
 	})
 
-	usersRouter.AddRoute("/:id", func(w http.ResponseWriter, r *http.Request) {
+	usersRouter.AddRoute("/{id}", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "User ID: %s\n", r.URL.Path)
 	})
 
@@ -186,59 +174,3 @@ func main() {
 func segmentPath(path string) []string {
 	return strings.Split(strings.Trim(path, "/"), "/")
 }
-
-// type contextKey string
-
-// const paramsKey contextKey = "params"
-
-// func contextWithParams(ctx context.Context, params map[string]string) context.Context {
-// 	return context.WithValue(ctx, paramsKey, params)
-// }
-
-// func ParamsFromContext(ctx context.Context) map[string]string {
-// 	params, ok := ctx.Value(paramsKey).(map[string]string)
-// 	if !ok {
-// 		return nil
-// 	}
-// 	return params
-// }
-
-// func insertNode(path string) {
-// 	pieces := segmentPath(path)
-
-// 	for _, p := range pieces {
-// 		if p.
-// 	}
-// }
-
-func (n *node) isParam() bool {
-	if len(n.prefix) == 0 {
-		return false
-	}
-	return n.prefix[0] == '{' && n.prefix[len(n.prefix)-1] == '}'
-}
-
-func (n *node) findChild(prefix string) *node {
-	for _, child := range n.children {
-		if child.prefix == prefix {
-			return child
-		}
-	}
-	return nil
-}
-
-// func insertNode(parent *node, prefix string) *node {
-// 	if child := parent.findChild(prefix); child != nil {
-
-// 		newNode := &node{
-// 			prefix:   prefix,
-// 			parent:   parent,
-// 			children: make([]*node, 0),
-// 		}
-// 		if newNode.isParam() {
-// 			newNode.type_ = nodePathParam
-// 		}
-// 		parent.children = append(parent.children, newNode)
-// 		return newNode
-// 	}
-// }
