@@ -46,7 +46,8 @@ func (route *Route) getCompletePath() {
 }
 
 func (route *Route) createRegexMatch() {
-	escapedPath := strings.ReplaceAll(route.fullPath, "/", "\\/")
+	// protect special characters in the path
+	escapedPath := regexp.QuoteMeta(route.fullPath)
 	regexPattern := regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(escapedPath, "([^/]+)")
 	route.regexp = regexp.MustCompile("^" + regexPattern + "$")
 }
@@ -138,7 +139,6 @@ func (r *Route) GenerateResponses() {
 	}
 
 	currentRouter := r.Router
-
 	for currentRouter != nil {
 		// avoid over-writing the original responses for the routers
 		clonedResponses := maps.Clone(currentRouter.Responses)
@@ -146,6 +146,7 @@ func (r *Route) GenerateResponses() {
 			clonedResponses = make(Responses)
 		}
 		maps.Copy(clonedResponses, r.Responses)
+		r.Responses = clonedResponses
 		currentRouter = currentRouter.parent
 	}
 }

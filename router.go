@@ -8,14 +8,22 @@ import (
 	"strings"
 )
 
-// Router defines a group of routes that share the same prefix and middlewares.
+// Router defines a group of routes that share the same prefix and middlewares. Think of
 type Router struct {
-	Name        string
-	Prefix      string //(optional) prefix, all Routes underneath will have paths that start with the prefix automatically
-	Routers     []*Router
-	Routes      []*Route
+	// Name of the Router. Used to generate OpenAPI tag.
+	Name string
+	// Prefix wil be used to prefix all routes/routers underneath this
+	Prefix string
+	// Routers is the children routers underneath this router. All children routers inherit routes attached to the router.
+	Routers []*Router
+	// Routes are the routes assigned to this router. Can be assigned by called Get/Post/Patch methods on a router.
+	Routes []*Route
+	// Middlewares
 	Middlewares []*Middleware
-	Tag         string
+	// Tag is the tag associated to the router and used to group routes together in the OpenAPI schema.
+	// If not explicitly provided, will be defaulted to Router Name.
+	Tag string
+	// Description is the description of the router. Currently not used I believe.
 	Description string
 	// Responses is a map of status code to puff.Response. Possible Responses for routes can be set at the Router (root as well),
 	// and Route level, however responses directly set on the route will have the highest specificity.
