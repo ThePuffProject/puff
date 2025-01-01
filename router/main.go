@@ -20,27 +20,16 @@ func (r *Router) AddRoute(path string, handler http.HandlerFunc) {
 	current := r.rootNode
 
 	for _, segment := range segments {
-		found := false
-		for _, child := range current.children {
-			if child.prefix == segment && child.type_ == determineNodeType(segment) {
-				current = child
-				found = true
-				break
-			}
+		child := current.findChild(segment, determineNodeType(segment))
+		if child == nil {
+			child = current.addChild(segment)
 		}
-		if !found {
-			newNode := &node{
-				prefix:   segment,
-				parent:   current,
-				children: []*node{},
-				type_:    determineNodeType(segment),
-			}
-			current.children = append(current.children, newNode)
-			// update pointer to continue adding segments to trie from here
-			current = newNode
-		}
+		current = child
 	}
 
+	if current.handler != nil {
+		panic(fmt.Sprintf("Handler conflict at '%s'", path))
+	}
 	current.handler = handler
 }
 

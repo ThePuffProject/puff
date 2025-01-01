@@ -22,7 +22,8 @@ type node struct {
 	handler http.HandlerFunc
 
 	// direct ascendant of node
-	parent   *node
+	parent *node
+	// TODO: split children into dynamic vs static children. so we can look certain things up via map if static.
 	children []*node
 	param    string
 	type_    nodeType

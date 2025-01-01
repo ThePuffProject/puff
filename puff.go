@@ -3,8 +3,18 @@ package puff
 
 import "log/slog"
 
-type HandlerFunc func(*Context)
-type Middleware func(next HandlerFunc) HandlerFunc
+type (
+	HandlerFunc func(*Context)
+	Middleware  func(next HandlerFunc) HandlerFunc
+)
+
+// ErrorConfig determines how Puff auto-returns errors in case of request-schema validation errors, among other things.
+type ErrorConfig struct {
+	// ErrorKey is the key Puff will use to return the error. UseJSONResponse must be set to true.
+	ErrorKey string
+	// UseJSONResponse determines if Puff will use JSON to return error. If false, errors will be returned as 'plain-text'.
+	UseJSONResponse bool
+}
 
 // AppConfig defines PuffApp parameters.
 type AppConfig struct {
@@ -28,6 +38,8 @@ type AppConfig struct {
 	LoggerConfig *LoggerConfig
 	// DisableOpenAPIGeneration controls whether an OpenAPI schema will be generated.
 	DisableOpenAPIGeneration bool
+	// ErrorConfig determines how Puff auto-returns errors.
+	ErrorConfig ErrorConfig
 }
 
 func App(c *AppConfig) *PuffApp {
