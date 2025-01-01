@@ -125,7 +125,11 @@ func (r *Router) Mount(prefix string, subRouter *Router) {
 		}
 	}
 
-	// Link the sub-router's root to the correct place in the main trie
+	// Crucial fix: Preserve the sub-router's original prefix
+	subRouter.rootNode.prefix = strings.TrimPrefix(subRouter.rootNode.prefix, "/")
+	if current.prefix != "" {
+		subRouter.rootNode.prefix = current.prefix + "/" + subRouter.rootNode.prefix
+	}
 	subRouter.rootNode.parent = current
 	current.children = append(current.children, subRouter.rootNode)
 }
