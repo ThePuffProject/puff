@@ -30,8 +30,7 @@ func (r *Router) AddRoute(path string, handler http.HandlerFunc) {
 	for _, newRouteSegment := range newRouteSegments {
 		found := false
 		for _, childNode := range current.children {
-			if childNode.prefix == newRouteSegment ||
-				(childNode.isParam() && strings.HasPrefix(newRouteSegment, childNode.prefix)) {
+			if childNode.prefix == newRouteSegment {
 				current = childNode
 				found = true
 				break
@@ -46,6 +45,7 @@ func (r *Router) AddRoute(path string, handler http.HandlerFunc) {
 
 	current.handler = handler
 }
+
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	segments := segmentPath(req.URL.Path)
 	current := r.rootNode
