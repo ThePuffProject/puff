@@ -174,7 +174,7 @@ func (r *Router) IncludeRouter(mountPath string, subRouter *Router) {
 	subRouter.puff = r.puff
 
 	segments := segmentPath(mountPath)
-	fmt.Println("segments", segments)
+	fmt.Println("segments", segments, "mountPath", mountPath, r.rootNode.prefix)
 	subRouter.rootNode.prefix = segments[0]
 
 	current := r.rootNode
@@ -319,7 +319,6 @@ func (r *Router) patchRoutes() {
 }
 
 func (r *Router) Visualize() {
-	fmt.Println("where are we getting ", r.rootNode.prefix)
 	fmt.Println("Radix Trie Structure:")
 	r.visualizeNode(r.rootNode, "", true)
 }
