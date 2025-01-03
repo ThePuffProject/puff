@@ -78,6 +78,7 @@ func isAnyOfThese[T comparable](value T, these ...T) bool {
 	}
 	return false
 }
+
 func resolveBool(spec string, def bool) (b bool, err error) {
 	switch spec {
 	case "":
@@ -92,4 +93,12 @@ func resolveBool(spec string, def bool) (b bool, err error) {
 		return
 	}
 	return
+}
+
+func segmentPath(path string) []string {
+	path = strings.Trim(path, "/") // Remove leading and trailing slashes
+	if path == "" {
+		return []string{}
+	}
+	return strings.Split(path, "/")
 }

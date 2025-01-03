@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
-	"strings"
 )
 
 type PuffApp struct {
@@ -21,12 +20,10 @@ type PuffApp struct {
 
 // Add a Router to the main app.
 // Under the hood attaches the router to the App's RootRouter
-func (a *PuffApp) IncludeRouter(r *Router) {
-	if !strings.HasPrefix(r.Prefix, "/") {
-		panic("Puff Routers must have a / prefix")
-	}
+func (a *PuffApp) IncludeRouter(mountPath string, r *Router) {
 	r.puff = a
-	a.RootRouter.IncludeRouter(r)
+
+	a.RootRouter.IncludeRouter(mountPath, r)
 }
 
 // Use registers a middleware function to be used by the root router of the PuffApp.
@@ -46,15 +43,12 @@ func (a *PuffApp) Use(m Middleware) {
 // This method will not add any routes if DocsURL is empty.
 //
 // Errors during spec generation are logged, and the method will exit early if any occur.
-func (a *PuffApp) addOpenAPIRoutes() {
+func (a *PuffApp) createDocsRouter() *Router {
 	if a.Config.DisableOpenAPIGeneration {
-		return
+		return nil
 	}
 	a.GenerateOpenAPISpec()
-	docsRouter := Router{
-		Prefix: a.Config.DocsURL,
-		Name:   "OpenAPI Documentation Router",
-	}
+	docsRouter := NewRouter("OpenAPI Documentation Router")
 
 	// Provides JSON OpenAPI Schema.
 	docsRouter.Get(".json", nil, func(c *Context) {
@@ -85,8 +79,7 @@ func (a *PuffApp) addOpenAPIRoutes() {
 		}
 		c.SendResponse(res)
 	})
-
-	a.IncludeRouter(&docsRouter)
+	return docsRouter
 }
 
 // attachMiddlewares recursively applies middlewares to all routes within a router.
@@ -132,17 +125,33 @@ func (a *PuffApp) patchAllRoutes() {
 // Parameters:
 // - listenAddr: The address the server will listen on (e.g., ":8080").
 func (a *PuffApp) ListenAndServe(listenAddr string) error {
-
 	a.patchAllRoutes()
-	a.addOpenAPIRoutes()
+	docsRouter := a.createDocsRouter()
+
+	apiRouter := &Router{
+		rootNode: new(node),
+		puff:     a,
+	}
+
+	if docsRouter != nil {
+		a.RootRouter.IncludeRouter(a.Config.DocsURL, docsRouter)
+	}
+	apiRouter.IncludeRouter("api", a.RootRouter)
+	fmt.Println("a.RootRouter", a.RootRouter.rootNode.prefix)
+	for _, child := range a.RootRouter.rootNode.children {
+		fmt.Println("child of the current router", a.RootRouter.rootNode.prefix, a.RootRouter.Path, a.RootRouter.Name, child.prefix)
+		for _, subChild := range child.children {
+			fmt.Println("subchild of the current router", child.prefix, subChild.prefix)
+		}
+	}
 
 	slog.Debug(fmt.Sprintf("Running Puff 💨 on %s", listenAddr))
-	slog.Debug(fmt.Sprintf("Visit docs 💨 on %s", fmt.Sprintf("http://localhost%s%s", listenAddr, a.Config.DocsURL)))
+	slog.Debug(fmt.Sprintf("Visit docs 💨 on %s", fmt.Sprintf("http://localhost%s%s%s", listenAddr, a.RootRouter.Path, a.Config.DocsURL)))
 
 	if a.Server == nil {
 		a.Server = &http.Server{
 			Addr:    listenAddr,
-			Handler: a.RootRouter,
+			Handler: apiRouter,
 		}
 	}
 
@@ -238,7 +247,7 @@ func (a *PuffApp) GenerateOpenAPISpec() {
 func (a *PuffApp) GeneratePathsTags() (*Paths, *[]Tag) {
 	tags := []Tag{}
 	tagNames := []string{}
-	var paths = make(Paths)
+	paths := make(Paths)
 	for _, route := range a.RootRouter.Routes {
 		addRoute(route, &tags, &tagNames, &paths)
 	}
@@ -269,4 +278,10 @@ func (a *PuffApp) Shutdown(ctx context.Context) error {
 // Close calls close on the underlying server.
 func (a *PuffApp) Close() error {
 	return a.Server.Close()
+}
+
+func (a *PuffApp) Visualize() {
+	fmt.Println("Radix Trie Structure:")
+	fmt.Println("where are we getting", a.RootRouter.rootNode.prefix)
+	a.RootRouter.visualizeNode(a.RootRouter.rootNode, "", true)
 }

@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
-	"regexp"
 	"strings"
 )
 
 type Route struct {
 	fullPath    string
-	regexp      *regexp.Regexp
 	params      []Parameter
 	Description string
 	WebSocket   bool
@@ -37,7 +35,7 @@ func (route *Route) getCompletePath() {
 	var parts []string
 	currentRouter := route.Router
 	for currentRouter != nil {
-		parts = append([]string{currentRouter.Prefix}, parts...)
+		parts = append([]string{currentRouter.Path}, parts...)
 		currentRouter = currentRouter.parent
 	}
 
@@ -45,12 +43,12 @@ func (route *Route) getCompletePath() {
 	route.fullPath = strings.Join(parts, "")
 }
 
-func (route *Route) createRegexMatch() {
-	// protect special characters in the path
-	escapedPath := regexp.QuoteMeta(route.fullPath)
-	regexPattern := regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(escapedPath, "([^/]+)")
-	route.regexp = regexp.MustCompile("^" + regexPattern + "$")
-}
+// func (route *Route) createRegexMatch() {
+// 	// protect special characters in the path
+// 	escapedPath := regexp.QuoteMeta(route.fullPath)
+// 	regexPattern := regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(escapedPath, "([^/]+)")
+// 	route.regexp = regexp.MustCompile("^" + regexPattern + "$")
+// }
 
 func (route *Route) handleInputSchema() error { // should this return an error or should it panic?
 	if route.Fields == nil {
@@ -81,8 +79,8 @@ func (route *Route) handleInputSchema() error { // should this return an error o
 		// param.Schema
 		newParam.Schema = newDefinition(route, sve.Field(i).Interface())
 
-		//param.In
-		specified_kind := svetf.Tag.Get("kind") //ref: Parameters object/In
+		// param.In
+		specified_kind := svetf.Tag.Get("kind") // ref: Parameters object/In
 		if name == "Body" && specified_kind == "" {
 			specified_kind = "body"
 		}
@@ -90,10 +88,10 @@ func (route *Route) handleInputSchema() error { // should this return an error o
 			return fmt.Errorf("specified kind on field %s in struct tag must be header, path, query, cookie, body, or formdata", svetf.Name)
 		}
 
-		//param.Description
+		// param.Description
 		description := svetf.Tag.Get("description")
 
-		//param.Required
+		// param.Required
 		specified_required := svetf.Tag.Get("required")
 		specified_deprecated := svetf.Tag.Get("deprecated")
 
@@ -111,7 +109,7 @@ func (route *Route) handleInputSchema() error { // should this return an error o
 			return err
 		}
 
-		//param.Schema.format
+		// param.Schema.format
 		format := svetf.Tag.Get("format")
 		if format != "" {
 			newParam.Schema.Format = format
@@ -132,7 +130,6 @@ func (route *Route) handleInputSchema() error { // should this return an error o
 // GenerateResponses is responsible for generating the 'responses' attribute in the OpenAPI schema.
 // Since responses can be specified at multiple levels, responses at the route level will be given the most specificity.
 func (r *Route) GenerateResponses() {
-
 	if r.Router.puff.Config.DocsURL == "" {
 		// if swagger documentation is off, we will not set responses
 		return

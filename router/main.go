@@ -103,6 +103,7 @@ func (r *Router) Mount(prefix string, subRouter *Router) {
 
 func (r *Router) Visualize() {
 	fmt.Println("Radix Trie Structure:")
+	fmt.Println("where are we getting ", r.rootNode.prefix)
 	r.visualizeNode(r.rootNode, "")
 }
 

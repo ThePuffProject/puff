@@ -22,8 +22,8 @@ type AppConfig struct {
 	Name string
 	// Version is the application version.
 	Version string
-	// Prefix is the RootRouter prefix under which all routes will be hosted. e.g "/api"
-	Prefix string
+	// Path is the RootRouter prefix under which all routes will be hosted. e.g "/api"
+	Path string
 	// DocsURL is the Router prefix for Swagger documentation.
 	DocsURL string
 	// TLSPublicCertFile specifies the file for the TLS certificate (usually .pem or .crt).
@@ -43,7 +43,13 @@ type AppConfig struct {
 }
 
 func App(c *AppConfig) *PuffApp {
-	r := &Router{Name: "Default", Tag: "Default", Description: "Default Router", Prefix: c.Prefix}
+	r := &Router{
+		Name:        "Default",
+		Tag:         "Default",
+		Description: "Default Router",
+		Path:        c.Path,
+		rootNode:    insertNode(c.Path),
+	}
 
 	a := &PuffApp{
 		Config:     c,

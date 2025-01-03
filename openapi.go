@@ -35,10 +35,7 @@ func parameterToRequestBodyOrReference(p Parameter) RequestBodyOrReference {
 }
 
 func addRoute(route *Route, tags *[]Tag, tagNames *[]string, paths *Paths) *Paths {
-	tag := route.Router.Tag //FIXME: tag on route should not just be tag on router
-	if tag == "" {
-		tag = route.Router.Name
-	}
+	tag := route.Router.Tag // FIXME: tag on route should not just be tag on router
 	if !slices.Contains(*tagNames, tag) {
 		*tagNames = append(*tagNames, tag)
 		*tags = append(*tags, Tag{Name: tag, Description: ""})
@@ -84,7 +81,7 @@ func addRoute(route *Route, tags *[]Tag, tagNames *[]string, paths *Paths) *Path
 		Summary:     generateSummary(*route),
 		OperationID: generateOperationId(*route),
 		Tags:        []string{tag},
-		Parameters:  parameters, //NOTE: check json struct tag on ParameterOrReference
+		Parameters:  parameters, // NOTE: check json struct tag on ParameterOrReference
 		RequestBody: &requestBody,
 		Responses:   convertRouteResponsestoOpenAPIResponses(*route),
 		Description: route.Description,

@@ -1,8 +1,4 @@
-package main
-
-import (
-	"net/http"
-)
+package puff
 
 type nodeType int8
 
@@ -20,7 +16,7 @@ const (
 type node struct {
 	// prefix is the value of the node
 	prefix     string
-	handler    http.HandlerFunc
+	routes     map[string]*Route
 	allMethods []string
 	// direct ascendant of node
 	parent *node
@@ -28,6 +24,26 @@ type node struct {
 	children []*node
 	param    string // what is param even doing??
 	type_    nodeType
+}
+
+func insertNode(p string) *node {
+	segments := segmentPath(p)
+	mountNode := &node{
+		prefix:   segments[0],
+		children: []*node{},
+	}
+
+	current := mountNode
+
+	for _, segment := range segments[1:] {
+		child := current.addChild(segment)
+		current = child
+	}
+
+	return &node{
+		prefix:   p,
+		children: []*node{},
+	}
 }
 
 func (n *node) findChild(segment string, nodeType nodeType) *node {
