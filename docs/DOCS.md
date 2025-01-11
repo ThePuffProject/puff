@@ -34,11 +34,11 @@ func main(){
         Name: "my_router_name_here",
         Prefix: ""
     )
-    app.IncludeRouter(router) // Including the router is mandatory to serve the router on the app.
+    app.Mount(router) // Including the router is mandatory to serve the router on the app.
 }
 ```
 
-It is possible to do `router.IncludeRouter(anotherRouter)`.
+It is possible to do `router.Mount(anotherRouter)`.
 
 ## Example Router Tree
 

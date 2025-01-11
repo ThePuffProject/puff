@@ -1,6 +1,8 @@
 package puff
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type nodeType int8
 
@@ -17,8 +19,9 @@ const (
 
 type node struct {
 	// prefix is the value of the node
-	prefix     string
-	routes     map[string]*Route
+	prefix string
+	routes map[string]*Route
+	// allMethods only needed, to avoid looping over methodRoutes to return Allow header
 	allMethods []string
 	// direct ascendant of node
 	parent *node
@@ -28,24 +31,30 @@ type node struct {
 	type_    nodeType
 }
 
+func newNode(prefix string, parent *node) *node {
+	return &node{
+		prefix:     prefix,
+		routes:     map[string]*Route{},
+		allMethods: []string{},
+		parent:     parent,
+		children:   []*node{},
+		type_:      determineNodeType(prefix),
+	}
+}
+
 func insertNode(p string) *node {
 	segments := segmentPath(p)
 	if len(segments) == 0 {
 		return nil // Handle edge cases where the path is empty
 	}
-	fmt.Println("entrypoint insertNode", segments)
 	// Create the root node with the first segment
-	mountNode := &node{
-		prefix:   segments[0],
-		children: []*node{},
-	}
+	mountNode := newNode(segments[0], nil)
 
 	current := mountNode
 
 	// Add children for subsequent segments
 	for _, segment := range segments[1:] {
 		child := current.addChild(segment)
-		fmt.Println("adding child while insertNode", child.prefix, "to parent", current.prefix)
 		current = child
 	}
 
@@ -61,11 +70,20 @@ func (n *node) findChild(segment string, nodeType nodeType) *node {
 	return nil
 }
 
+func (n *node) isMethodTaken(method, path string) bool {
+	r, exists := n.routes[method]
+	if exists {
+		return r.Path == path
+	}
+	return false
+}
+
 func (n *node) addChild(prefix string) *node {
 	// Validate the prefix
-	if prefix == "" {
-		panic("prefix cannot be empty when adding a child node")
-	}
+	// if prefix == "" {
+	// 	err := fmt.Errorf("prefix was empty when adding child to node %s", n.prefix)
+	// 	panic(err)
+	// }
 
 	// Check for duplicate prefixes among children
 	for _, child := range n.children {
@@ -75,12 +93,7 @@ func (n *node) addChild(prefix string) *node {
 	}
 
 	// Create the new child node
-	newNode := &node{
-		prefix:   prefix,
-		parent:   n,
-		type_:    determineNodeType(prefix),
-		children: []*node{},
-	}
+	newNode := newNode(prefix, nil)
 
 	n.children = append(n.children, newNode)
 	return newNode

@@ -2,10 +2,10 @@ package puff
 
 import (
 	"fmt"
-	"log/slog"
+	"maps"
 	"net/http"
 	"runtime"
-	"slices"
+	"strings"
 )
 
 // Router defines a group of routes that share the same prefix and middlewares. Think of
@@ -30,7 +30,7 @@ type Router struct {
 	// Responses is a map of status code to puff.Response. Possible Responses for routes can be set at the Router (root as well),
 	// and Route level, however responses directly set on the route will have the highest specificity.
 	Responses Responses
-	// parent maps to the router's immediate parent. Will be nil for RootRouter
+	// parent maps to the router's immediate parent. Will be nil for rootRouter
 	parent *Router
 	// puff maps to the original PuffApp
 	puff     *PuffApp
@@ -39,11 +39,12 @@ type Router struct {
 
 // NewRouter creates a new router provided router name and path prefix.
 func NewRouter(name string) *Router {
-	// note newRouter creates a dummy node. this will be populated on IncludeRouter.
+	// note newRouter creates a dummy node. this will be populated on Mount.
 	return &Router{
+		Path:      "", // will be updated later
 		Name:      name,
 		Responses: Responses{},
-		rootNode:  new(node),
+		rootNode:  insertNode(name),
 		Tag:       name,
 	}
 }
@@ -55,22 +56,52 @@ func (r *Router) registerRoute(
 	fields any,
 ) *Route {
 	segments := segmentPath(path)
-
 	current := r.rootNode
 
-	for _, segment := range segments {
-		child := current.findChild(segment, determineNodeType(segment))
-		if child == nil {
-			child = current.addChild(segment)
+	if (path == "" || path[0] != '/') && len(segments) < 2 {
+		if path == "" && !current.isMethodTaken(method, path) {
+			return addRouteToNode(current, r, method, path, handleFunc, fields)
 		}
-		current = child
+		child := current.findChild(path, determineNodeType(path))
+		if child == nil {
+			current = current.addChild(path)
+		}
+		return addRouteToNode(
+			current, r, method, path, handleFunc, fields,
+		)
+
 	}
-	if slices.Contains(current.allMethods, method) {
-		err := fmt.Errorf("cannot define route '%s' with method '%s' as it already exists", path, method)
+
+	if path[0] != '/' && len(segments) > 0 {
+		// avoiding routes such as 'users/foo'
+		err := fmt.Sprintf("Improperly formatted route with method %s and path %s", method, path)
 		panic(err)
 	}
 
-	current.allMethods = append(current.allMethods, method)
+	for _, segment := range segments {
+		segment_w_slash := "/" + segment
+		child := current.findChild(segment_w_slash, determineNodeType(segment))
+		if child == nil {
+			child = current.addChild(segment_w_slash)
+		}
+
+		current = child
+	}
+
+	return addRouteToNode(
+		current, r, method, path, handleFunc, fields,
+	)
+}
+
+// Helper to add a route to the current node
+func addRouteToNode(
+	node *node,
+	r *Router,
+	method string,
+	path string,
+	handleFunc func(*Context),
+	fields any,
+) *Route {
 	_, file, line, ok := runtime.Caller(2)
 	newRoute := &Route{
 		Description: readDescription(file, line, ok),
@@ -81,11 +112,14 @@ func (r *Router) registerRoute(
 		Router:      r,
 		Responses:   Responses{},
 	}
-	if current.routes == nil {
-		current.routes = make(map[string]*Route)
+	if node.isMethodTaken(method, path) {
+		panic(fmt.Sprintf("cannot add route with prefix %s on Router %s due to method conflict. Method %s is already being used. Existing route is %s %s", path, r.Name, method, node.routes[method].Path, node.routes[method]))
 	}
-	current.routes[method] = newRoute
-
+	if node.routes == nil {
+		node.routes = make(map[string]*Route)
+	}
+	node.routes[method] = newRoute
+	node.allMethods = append(node.allMethods, method)
 	r.Routes = append(r.Routes, newRoute)
 	return newRoute
 }
@@ -146,20 +180,21 @@ func (r *Router) WebSocket(
 	return &newRoute
 }
 
-func (r *Router) IncludeRouter(mountPath string, subRouter *Router) {
-	// if len(mountPath) == 0 || mountPath[0] != '/' {
-	// 	err := fmt.Errorf("mountPath '%s' for router %s is invalid. Paths must begin with '/' and may not be empty",
-	// 		mountPath, subRouter.Name,
-	// 	)
-	// 	panic(err)
-	// }
+func (r *Router) Mount(mountPath string, subRouter *Router) *Router {
+	if r == subRouter {
+		panic("u are being a silly goose")
+	}
+
 	if subRouter == nil {
 		err := fmt.Errorf("subRouter is nil. Cannot attach nil router to %s", r.Name)
 		panic(err)
 	}
 
-	if len(mountPath) == 0 {
-		mountPath = "/"
+	if len(mountPath) == 0 || mountPath[0] != '/' {
+		err := fmt.Errorf("mountPath '%s' for router %s is invalid. Paths must begin with '/' and may not be empty",
+			mountPath, subRouter.Name,
+		)
+		panic(err)
 	}
 
 	if subRouter.parent != nil {
@@ -169,32 +204,29 @@ func (r *Router) IncludeRouter(mountPath string, subRouter *Router) {
 		)
 		panic(err)
 	}
+
 	subRouter.Path = mountPath
 	subRouter.parent = r
 	subRouter.puff = r.puff
 
 	segments := segmentPath(mountPath)
-	fmt.Println("segments", segments, "mountPath", mountPath, r.rootNode.prefix)
 	subRouter.rootNode.prefix = segments[0]
 
 	current := r.rootNode
 
 	for _, part := range segments {
+		segment_w_slash := "/" + part
 		found := false
 		// check for matching segments to attach it to
 		for _, child := range current.children {
-			if child.prefix == part {
+			if child.prefix == segment_w_slash {
 				current = child
 				found = true
 				break
 			}
 		}
 		if !found {
-			newNode := &node{
-				prefix:   part,
-				parent:   current,
-				children: []*node{},
-			}
+			newNode := newNode(segment_w_slash, current)
 			current.children = append(current.children, newNode)
 			current = newNode
 		}
@@ -206,7 +238,11 @@ func (r *Router) IncludeRouter(mountPath string, subRouter *Router) {
 		current.children = append(current.children, child)
 	}
 
+	maps.Copy(current.routes, subRouter.rootNode.routes)
+	current.allMethods = append(current.allMethods, subRouter.rootNode.allMethods...)
+
 	r.Routers = append(r.Routers, subRouter)
+	return subRouter
 }
 
 // Use adds a middleware to the router's list of middlewares. Middleware functions
@@ -238,23 +274,31 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	segments := segmentPath(req.URL.Path)
 	current := r.rootNode
 	params := []string{}
+	runningPrefixMatches := ""
 
 	c := NewContext(w, req, r.puff)
 
 	for _, segment := range segments {
+		segmentWithSlash := "/" + segment
 		found := false
 
 		for _, child := range current.children {
-			fmt.Println("child.prefix", child.prefix, "segment", segment)
-			if child.prefix == segment {
-				// prefer static match when found and break loop.
+			if child.prefix == segmentWithSlash { // Exact match
+				runningPrefixMatches += child.prefix
 				found = true
-				fmt.Println("found node", child.prefix, "moving to it")
 				current = child
 				break
-			} else if child.type_ == nodePathParam {
+			} else if child.type_ == nodePathParam { // Path parameter match
+				runningPrefixMatches += segmentWithSlash
 				found = true
+				params = append(params, segment)
 				current = child
+				break
+			} else if strings.HasPrefix(segmentWithSlash, child.prefix) || strings.HasPrefix(segment, child.prefix) { // Prefix match
+				runningPrefixMatches += child.prefix
+				current = child
+				found = true
+				break
 			}
 		}
 		if !found {
@@ -274,15 +318,15 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			c.BadRequest(err.Error())
 			return
 		}
+
 		if route.WebSocket {
 			err := c.handleWebSocket()
-			if err != nil { // the message has already been passed on by the function; we may just return at this point
+			if err != nil {
 				return
 			}
 		}
 		route.Handler(c)
 		return
-
 	}
 	http.NotFound(w, req)
 }
@@ -312,22 +356,24 @@ func (r *Router) patchRoutes() {
 		if err != nil {
 			panic("error with Input Schema for route " + route.Path + " on router " + r.Name + ". Error: " + err.Error())
 		}
-		slog.Debug(fmt.Sprintf("Serving route: %s", route.fullPath))
 		// populate route with their respective responses
 		route.GenerateResponses()
 	}
 }
 
 func (r *Router) Visualize() {
-	fmt.Println("Radix Trie Structure:")
 	r.visualizeNode(r.rootNode, "", true)
 }
 
 func (r *Router) visualizeNode(n *node, prefix string, isLast bool) {
+	// fmt.Println("visualizing node", n.prefix)
 	// Determine the branch symbol
 	branch := "├──"
 	if isLast {
 		branch = "└──"
+	}
+	if n.parent == nil {
+		branch = ""
 	}
 
 	// Print the current node's prefix and methods
@@ -347,6 +393,7 @@ func (r *Router) visualizeNode(n *node, prefix string, isLast bool) {
 
 	// Recurse into each child node
 	for i, child := range n.children {
+		// fmt.Println("what is child of n", n.prefix, child.prefix)
 		isLastChild := i == len(n.children)-1
 		r.visualizeNode(child, childPrefix, isLastChild)
 	}

@@ -22,8 +22,6 @@ type AppConfig struct {
 	Name string
 	// Version is the application version.
 	Version string
-	// Path is the RootRouter prefix under which all routes will be hosted. e.g "/api"
-	Path string
 	// DocsURL is the Router prefix for Swagger documentation.
 	DocsURL string
 	// TLSPublicCertFile specifies the file for the TLS certificate (usually .pem or .crt).
@@ -40,20 +38,17 @@ type AppConfig struct {
 	DisableOpenAPIGeneration bool
 	// ErrorConfig determines how Puff auto-returns errors.
 	ErrorConfig ErrorConfig
+
+	// VisualizeRoutesOnStartup controls whether Puff will display the radix trie router on Startup or not.
+	VisualizeRoutesOnStartup bool
 }
 
 func App(c *AppConfig) *PuffApp {
-	r := &Router{
-		Name:        "Default",
-		Tag:         "Default",
-		Description: "Default Router",
-		Path:        c.Path,
-		rootNode:    insertNode(c.Path),
-	}
+	r := NewRouter(c.Name)
 
 	a := &PuffApp{
 		Config:     c,
-		RootRouter: r,
+		rootRouter: r,
 	}
 	if a.Config.LoggerConfig == nil {
 		a.Config.LoggerConfig = &LoggerConfig{}
@@ -61,8 +56,8 @@ func App(c *AppConfig) *PuffApp {
 	l := NewLogger(a.Config.LoggerConfig)
 	slog.SetDefault(l)
 
-	a.RootRouter.puff = a
-	a.RootRouter.Responses = Responses{}
+	a.rootRouter.puff = a
+	a.rootRouter.Responses = Responses{}
 	return a
 }
 

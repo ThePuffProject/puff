@@ -96,9 +96,22 @@ func resolveBool(spec string, def bool) (b bool, err error) {
 }
 
 func segmentPath(path string) []string {
-	path = strings.Trim(path, "/") // Remove leading and trailing slashes
-	if path == "" {
-		return []string{}
+	// Remove leading and trailing slashes
+	path = strings.Trim(path, "/")
+
+	// handle special characters separately
+
+	if i := strings.LastIndex(path, "."); i > 0 && !strings.Contains(path[i:], "/") {
+		return append(strings.Split(path[:i], "/"), path[i:])
 	}
+
 	return strings.Split(path, "/")
+}
+
+func longestCommonPrefix(a, b string) int {
+	i := 0
+	for i < len(a) && i < len(b) && a[i] == b[i] {
+		i++
+	}
+	return i
 }

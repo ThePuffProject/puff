@@ -24,7 +24,13 @@ type Route struct {
 }
 
 func (r *Route) String() string {
-	return fmt.Sprintf("Protocol: %s\nPath: %s\n", r.Protocol, r.Path)
+	var path string
+	if r.Path == "" {
+		path = "''"
+	} else {
+		path = r.Path
+	}
+	return fmt.Sprintf("Protocol: %s Path: %s", r.Protocol, path)
 }
 
 func (r *Route) GetFullPath() string {
