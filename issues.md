@@ -1,7 +1,23 @@
 - documents issues with the current router
 
-docs url: /api/docs
+mounting order is very important apparently oops
 
-adding apiRouter : "/api" with a router like "/users" causes docs to win and drop everything inside /users
+/docs
+.json
 
-straight up mounting doesnt work...
+    -foo
+
+/tenants/{tenant_id}/conversations/{conversation_id}
+
+
+/users is the router
+
+
+
+
+we are hardcoding to allow . but i think thats okay
+
+
+
+
+generally discourage to create silly routes that dont use

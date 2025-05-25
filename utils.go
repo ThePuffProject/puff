@@ -40,9 +40,9 @@ func RandomToken(length int) string {
 	return base64.StdEncoding.EncodeToString(randomBytes)
 }
 
-func resolveContentType(provided, default_content_type string) string {
+func resolveContentType(provided, _default string) string {
 	if provided == "" {
-		return default_content_type
+		return _default
 	}
 	return provided
 }

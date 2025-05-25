@@ -44,15 +44,6 @@ func TestApp(t *testing.T) {
 	if app.Config.OpenAPI != nil {
 		t.Errorf("Expected OpenAPI to not be set.")
 	}
-	if app.rootRouter == nil {
-		t.Fatalf("Expected rootRouter to be initialized")
-	}
-	if app.rootRouter.Name != "Default" {
-		t.Errorf("Expected rootRouter name 'Default', got '%s'", app.rootRouter.Name)
-	}
-	if app.rootRouter.Tag != "Default" {
-		t.Errorf("Expected rootRouter tag 'Default', got '%s'", app.rootRouter.Tag)
-	}
 }
 
 func TestApp_DefaultVersion(t *testing.T) {

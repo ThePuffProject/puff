@@ -24,9 +24,9 @@ type Context struct {
 	// WebSocket will be nil if the route does not use websockets.
 	WebSocket *websocket.Conn
 
-	// LoggerConfig
-	LoggerConfig LoggerConfig
-	statusCode   int
+	statusCode int
+
+	puff *PuffApp
 }
 
 func NewContext(w http.ResponseWriter, r *http.Request, a *PuffApp) *Context {
@@ -34,7 +34,7 @@ func NewContext(w http.ResponseWriter, r *http.Request, a *PuffApp) *Context {
 		Request:        r,
 		ResponseWriter: w,
 		registry:       make(map[string]any), // prevents assignment to nil map
-		LoggerConfig:   *a.Config.LoggerConfig,
+		puff:           a,
 	}
 }
 
@@ -187,11 +187,20 @@ func (ctx *Context) GetBearerToken() string {
 // below are methods that are more error message focused.
 
 func (ctx *Context) response(status_code int, message string, a ...any) {
-	ctx.SendResponse(JSONResponse{
+
+	if ctx.puff.Config.ErrorConfig.UseJSONResponse {
+		ctx.SendResponse(JSONResponse{
+			StatusCode: status_code,
+			Content: map[string]any{
+				ctx.puff.Config.ErrorConfig.ErrorKey: fmt.Sprintf(message, a...),
+			},
+		})
+		return
+	}
+
+	ctx.SendResponse(GenericResponse{
 		StatusCode: status_code,
-		Content: map[string]any{
-			"error": fmt.Sprintf(message, a...),
-		},
+		Content:    fmt.Sprintf(message, a...),
 	})
 }
 

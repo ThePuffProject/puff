@@ -55,6 +55,7 @@ func (r *Router) registerRoute(
 	handleFunc func(*Context),
 	fields any,
 ) *Route {
+
 	segments := segmentPath(path)
 	current := r.rootNode
 
