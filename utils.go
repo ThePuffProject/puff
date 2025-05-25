@@ -115,3 +115,63 @@ func longestCommonPrefix(a, b string) int {
 	}
 	return i
 }
+
+// extractParamName extracts the name from a parameter prefix.
+// Examples: "{id}" -> "id", "*filepath" -> "filepath", "*" -> "wildcard", "*{name}" -> "name".
+func extractParamName(prefix string) string {
+	if len(prefix) > 0 && prefix[0] == '{' && prefix[len(prefix)-1] == '}' {
+		// Handles "{param}"
+		if len(prefix) > 2 { // Ensure there's something between {}
+			return prefix[1 : len(prefix)-1]
+		}
+	}
+	if len(prefix) > 0 && prefix[0] == '*' {
+		// Handles "*" or "*{name}" or "*name"
+		if len(prefix) > 1 {
+			if prefix[1] == '{' && len(prefix) > 2 && prefix[len(prefix)-1] == '}' {
+				// Handles "*{name}"
+				if len(prefix) > 3 { // Ensure *{n}
+					return prefix[2 : len(prefix)-1]
+				}
+				// Case like "*{}" - treat as wildcard or error? For now, wildcard.
+			} else {
+				// Handles "*name"
+				return prefix[1:]
+			}
+		}
+		return "wildcard" // Default for anonymous "*"
+	}
+	// Should ideally not be reached for validly structured param/any node prefixes.
+	// Returning the original prefix might indicate an issue with node prefixing.
+	return prefix
+}
+
+// joinPaths combines a base path and a segment path, ensuring a single slash between them.
+// Handles various edge cases like empty paths or slashes at boundaries.
+func joinPaths(base, segment string) string {
+	// Normalize base: ensure it's not empty and ends with a slash if it's not just "/"
+	if base == "" || base == "/" {
+		base = "/"
+	} else {
+		base = strings.TrimSuffix(base, "/") // remove potential trailing slash from base
+	}
+
+	// Normalize segment: remove leading slash
+	segment = strings.TrimPrefix(segment, "/")
+
+	// Handle cases where segment might be empty after trimming
+	if segment == "" {
+		if base == "/" { // if base was also just "/", return "/"
+			return "/"
+		}
+		// if segment is empty, result is just the (trimmed) base
+		return base 
+	}
+	
+	// If base was just "/", avoid double slash at the beginning if segment is not empty
+	if base == "/" {
+		return "/" + segment
+	}
+
+	return base + "/" + segment
+}

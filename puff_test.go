@@ -16,15 +16,17 @@ import (
 )
 
 func TestApp(t *testing.T) {
-	// Test with all configuration fields set
-	config := puff.AppConfig{
-		Name:              "TestApp",
-		Version:           "1.2.3",
-		DocsURL:           "/test-docs",
-		TLSPublicCertFile: "cert.pem",
-		TLSPrivateKeyFile: "key.pem",
-	}
-	app := puff.App(&config)
+	// Test with all configuration fields set using the new Config struct
+	cfg := puff.DefaultConfig() // Start with defaults
+	cfg.Name = "TestApp"
+	cfg.Version = "1.2.3"
+	cfg.DocsURL = "/test-docs"
+	cfg.TLSPublicCertFile = "cert.pem"
+	cfg.TLSPrivateKeyFile = "key.pem"
+	// Note: OpenAPI is typically initialized by PuffApp itself if nil.
+	// LoggerConfig and ErrorConfig are part of DefaultConfig.
+
+	app := puff.App(cfg.Name, cfg) // Use new App signature
 
 	if app.Config.Name != "TestApp" {
 		t.Errorf("Expected app name 'TestApp', got '%s'", app.Config.Name)
@@ -41,33 +43,43 @@ func TestApp(t *testing.T) {
 	if app.Config.TLSPrivateKeyFile != "key.pem" {
 		t.Errorf("Expected TLSPrivateKeyFile 'key.pem', got '%s'", app.Config.TLSPrivateKeyFile)
 	}
+	// DefaultConfig initializes OpenAPI to nil, which is fine.
 	if app.Config.OpenAPI != nil {
-		t.Errorf("Expected OpenAPI to not be set.")
+		t.Errorf("Expected OpenAPI to be nil initially, got %v", app.Config.OpenAPI)
 	}
 }
 
 func TestApp_DefaultVersion(t *testing.T) {
-	// Test with default version when version is not provided in the config
-	config := puff.AppConfig{
-		Name: "TestAppWithDefaultVersion",
-	}
-	app := puff.App(&config)
+	// Test with default version when version is not provided (it's set by DefaultConfig)
+	appName := "TestAppWithDefaultVersion"
+	cfg := puff.DefaultConfig() // DefaultConfig now sets a default version
+	cfg.Name = appName
+	// To test if a specific field was NOT overridden from its default,
+	// we'd compare against DefaultConfig()'s value for that field.
+	// DefaultConfig().Version is "0.0.1"
 
-	if app.Config.Version != "0.0.0" {
-		t.Errorf("Expected default version '0.0.0', got '%s'", app.Config.Version)
+	app := puff.App(appName, cfg)
+
+	if app.Config.Version != "0.0.1" { // Check against the new default from DefaultConfig
+		t.Errorf("Expected default version '0.0.1', got '%s'", app.Config.Version)
+	}
+	if app.Config.Name != appName {
+		t.Errorf("Expected app name '%s', got '%s'", appName, app.Config.Name)
 	}
 }
 
 func TestDefaultApp(t *testing.T) {
-	app := puff.DefaultApp("DefaultAppTest")
+	appName := "DefaultAppTest"
+	app := puff.DefaultApp(appName) // DefaultApp sets the name internally
 
-	if app.Config.Name != "DefaultAppTest" {
-		t.Errorf("Expected app name 'DefaultAppTest', got '%s'", app.Config.Name)
+	if app.Config.Name != appName {
+		t.Errorf("Expected app name '%s', got '%s'", appName, app.Config.Name)
 	}
-	if app.Config.Version != "1.0.0" {
-		t.Errorf("Expected default version '1.0.0', got '%s'", app.Config.Version)
+	// Check against values set by DefaultConfig() and potentially modified by DefaultApp()
+	if app.Config.Version != "0.0.1" { // As per DefaultConfig
+		t.Errorf("Expected default version '0.0.1', got '%s'", app.Config.Version)
 	}
-	if app.Config.DocsURL != "/docs" {
+	if app.Config.DocsURL != "/docs" { // As per DefaultConfig
 		t.Errorf("Expected default DocsURL '/docs', got '%s'", app.Config.DocsURL)
 	}
 }

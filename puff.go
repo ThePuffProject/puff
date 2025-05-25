@@ -8,52 +8,61 @@ type (
 	Middleware  func(next HandlerFunc) HandlerFunc
 )
 
-// ErrorConfig determines how Puff auto-returns errors in case of request-schema validation errors, among other things.
-type ErrorConfig struct {
-	// ErrorKey is the key Puff will use to return the error. UseJSONResponse must be set to true.
-	ErrorKey string
-	// UseJSONResponse determines if Puff will use JSON to return error. If false, errors will be returned as 'plain-text'.
-	UseJSONResponse bool
-}
+// ErrorConfig struct is now defined in config.go. This local definition is removed.
+// type ErrorConfig struct {
+// 	// ErrorKey is the key Puff will use to return the error. UseJSONResponse must be set to true.
+// 	ErrorKey string
+// 	// UseJSONResponse determines if Puff will use JSON to return error. If false, errors will be returned as 'plain-text'.
+// 	UseJSONResponse bool
+// }
 
-// AppConfig defines PuffApp parameters.
+// Commenting out the old AppConfig as it's being superseded by Config from config.go
+/*
 type AppConfig struct {
-	// Name is the application name
 	Name string
-	// Version is the application version.
 	Version string
-	// DocsURL is the Router prefix for Swagger documentation.
 	DocsURL string
-	// TLSPublicCertFile specifies the file for the TLS certificate (usually .pem or .crt).
 	TLSPublicCertFile string
-	// TLSPrivateKeyFile specifies the file for the TLS private key (usually .key).
 	TLSPrivateKeyFile string
-	// OpenAPI configuration. Gives users access to the OpenAPI spec generated. Can be manipulated by the user.
 	OpenAPI *OpenAPI
-	// SwaggerUIConfig is the UI specific configuration.
 	SwaggerUIConfig *SwaggerUIConfig
-	// LoggerConfig is the application logger config.
 	LoggerConfig *LoggerConfig
-	// DisableOpenAPIGeneration controls whether an OpenAPI schema will be generated.
 	DisableOpenAPIGeneration bool
-	// ErrorConfig determines how Puff auto-returns errors.
-	ErrorConfig ErrorConfig
-
-	// VisualizeRoutesOnStartup controls whether Puff will display the radix trie router on Startup or not.
+	ErrorConfig *ErrorConfig // This was already changed to *ErrorConfig
 	VisualizeRoutesOnStartup bool
 }
+*/
 
-func App(c *AppConfig) *PuffApp {
-	r := NewRouter(c.Name)
+// App function now takes *Config.
+// PuffApp.Config field type must be changed from *AppConfig to *Config where PuffApp is defined.
+func App(appName string, cfg *Config) *PuffApp { // Changed signature
+	r := NewRouter(appName) // Router name taken from a new parameter
 
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+	if cfg.ErrorConfig == nil {
+		// Ensure ErrorConfig is initialized, as DefaultConfig() provides it.
+		// This handles cases where a Config literal might be passed with nil ErrorConfig.
+		defaultErrCfg := DefaultConfig().ErrorConfig
+		if defaultErrCfg != nil {
+			cfg.ErrorConfig = defaultErrCfg
+		} else { // Fallback, though DefaultConfig should always provide it
+			cfg.ErrorConfig = &ErrorConfig{}
+		}
+	}
+	
+	// Assuming PuffApp struct has its Config field type updated to *Config
 	a := &PuffApp{
-		Config:     c,
+		Config:     cfg,
 		rootRouter: r,
 	}
-	if a.Config.LoggerConfig == nil {
-		a.Config.LoggerConfig = &LoggerConfig{}
+
+	// Logger setup using LoggerConfig from the merged Config struct
+	if cfg.LoggerConfig == nil {
+		cfg.LoggerConfig = &LoggerConfig{} // Provide a default if nil
 	}
-	l := NewLogger(a.Config.LoggerConfig)
+	l := NewLogger(cfg.LoggerConfig)
 	slog.SetDefault(l)
 
 	a.rootRouter.puff = a
@@ -62,11 +71,14 @@ func App(c *AppConfig) *PuffApp {
 }
 
 func DefaultApp(name string) *PuffApp {
-	app := App(&AppConfig{
-		Version: "0.0.0",
-		Name:    name,
-		DocsURL: "/docs",
-	})
+	// Now uses the new App signature and DefaultConfig() which returns *Config
+	cfg := DefaultConfig()
+	cfg.Name = name // Set the application name from the parameter
 
+	// Other specific defaults from the old AppConfig if needed:
+	// cfg.Version = "0.0.0" // Already set by DefaultConfig()
+	// cfg.DocsURL = "/docs"   // Already set by DefaultConfig()
+	
+	app := App(name, cfg)
 	return app
 }

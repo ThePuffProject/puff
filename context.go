@@ -23,6 +23,8 @@ type Context struct {
 	// WebSocket represents WebSocket connection and its related context, connection, and events.
 	// WebSocket will be nil if the route does not use websockets.
 	WebSocket *websocket.Conn
+	// PathParams holds the path parameters extracted from the URL.
+	PathParams map[string]string
 
 	statusCode int
 
@@ -34,6 +36,7 @@ func NewContext(w http.ResponseWriter, r *http.Request, a *PuffApp) *Context {
 		Request:        r,
 		ResponseWriter: w,
 		registry:       make(map[string]any), // prevents assignment to nil map
+		PathParams:     make(map[string]string), // Initialize PathParams
 		puff:           a,
 	}
 }
@@ -230,4 +233,19 @@ func (ctx *Context) NotFound(message string, a ...any) {
 // message and the arguments following.
 func (ctx *Context) InternalServerError(message string, a ...any) {
 	ctx.response(500, message, a...)
+}
+
+// Text sends a plain text response.
+func (ctx *Context) Text(code int, s string) {
+	if ctx.WebSocket != nil {
+		slog.Error("calls to Text on routes using websockets is not permitted.")
+		return
+	}
+	ctx.SetContentType("text/plain; charset=utf-8")
+	ctx.SetStatusCode(code) // This will write the header
+	_, err := fmt.Fprint(ctx.ResponseWriter, s)
+	if err != nil {
+		// Log the error, but the response header is already sent.
+		slog.Error(fmt.Sprintf("error writing text response: %v", err))
+	}
 }

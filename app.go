@@ -10,7 +10,8 @@ import (
 
 type PuffApp struct {
 	// Config is the underlying application configuration.
-	Config *AppConfig
+	// Changed from *AppConfig to *Config to align with config.go
+	Config *Config
 
 	// Server is the http.Server that will be used to serve requests.
 	Server *http.Server
