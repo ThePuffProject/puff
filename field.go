@@ -477,6 +477,7 @@ func handleStructType(route *Route, st reflect.Type, sv reflect.Value) *Schema {
 		newDef.Properties[fieldName] = fieldSchema
 	}
 
+	// TODO(aji): if un-named struct, need to fallback to key.
 	Schemas[st.Name()] = &newDef
 	return &Schema{
 		Ref: "#/components/schemas/" + st.Name(),

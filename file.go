@@ -24,7 +24,7 @@ func (f *File) SaveTo(filepath ...string) (n int, err error) {
 		return
 	}
 	defer f.MultipartFile.Close()
-	file, err := os.OpenFile(fp, os.O_CREATE|os.O_WRONLY, 0640)
+	file, err := os.OpenFile(fp, os.O_CREATE|os.O_WRONLY, 0o640)
 	if err != nil {
 		return 0, err
 	}

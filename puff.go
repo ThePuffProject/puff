@@ -3,8 +3,18 @@ package puff
 
 import "log/slog"
 
-type HandlerFunc func(*Context)
-type Middleware func(next HandlerFunc) HandlerFunc
+type (
+	HandlerFunc func(*Context)
+	Middleware  func(next HandlerFunc) HandlerFunc
+)
+
+// ErrorConfig determines how Puff auto-returns errors in case of request-schema validation errors, among other things.
+type ErrorConfig struct {
+	// ErrorKey is the key Puff will use to return the error. UseJSONResponse must be set to true.
+	ErrorKey string
+	// UseJSONResponse determines if Puff will use JSON to return error. If false, errors will be returned as 'plain-text'.
+	UseJSONResponse bool
+}
 
 // AppConfig defines PuffApp parameters.
 type AppConfig struct {
@@ -12,7 +22,7 @@ type AppConfig struct {
 	Name string
 	// Version is the application version.
 	Version string
-	// DocsURL is the Router prefix for Swagger documentation. Can be "" to disable Swagger documentation.
+	// DocsURL is the Router prefix for Swagger documentation.
 	DocsURL string
 	// TLSPublicCertFile specifies the file for the TLS certificate (usually .pem or .crt).
 	TLSPublicCertFile string
@@ -26,14 +36,19 @@ type AppConfig struct {
 	LoggerConfig *LoggerConfig
 	// DisableOpenAPIGeneration controls whether an OpenAPI schema will be generated.
 	DisableOpenAPIGeneration bool
+	// ErrorConfig determines how Puff auto-returns errors.
+	ErrorConfig ErrorConfig
+
+	// VisualizeRoutesOnStartup controls whether Puff will display the radix trie router on Startup or not.
+	VisualizeRoutesOnStartup bool
 }
 
 func App(c *AppConfig) *PuffApp {
-	r := &Router{Name: "Default", Tag: "Default", Description: "Default Router"}
+	r := NewRouter(c.Name)
 
 	a := &PuffApp{
 		Config:     c,
-		RootRouter: r,
+		rootRouter: r,
 	}
 	if a.Config.LoggerConfig == nil {
 		a.Config.LoggerConfig = &LoggerConfig{}
@@ -41,8 +56,8 @@ func App(c *AppConfig) *PuffApp {
 	l := NewLogger(a.Config.LoggerConfig)
 	slog.SetDefault(l)
 
-	a.RootRouter.puff = a
-	a.RootRouter.Responses = Responses{}
+	a.rootRouter.puff = a
+	a.rootRouter.Responses = Responses{}
 	return a
 }
 

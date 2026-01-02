@@ -11,18 +11,18 @@ import (
 type PuffApp struct {
 	// Config is the underlying application configuration.
 	Config *AppConfig
-	// RootRouter is the application's default router.
-	RootRouter *Router
 
 	// Server is the http.Server that will be used to serve requests.
 	Server *http.Server
+
+	// rootRouter is the application's default router.
+	rootRouter *Router
 }
 
 // Add a Router to the main app.
-// Under the hood attaches the router to the App's RootRouter
-func (a *PuffApp) IncludeRouter(r *Router) {
-	r.puff = a
-	a.RootRouter.IncludeRouter(r)
+// Under the hood attaches the router to the App's rootRouter
+func (a *PuffApp) Mount(mountPath string, r *Router) *Router {
+	return a.rootRouter.Mount(mountPath, r)
 }
 
 // Use registers a middleware function to be used by the root router of the PuffApp.
@@ -31,7 +31,7 @@ func (a *PuffApp) IncludeRouter(r *Router) {
 // Parameters:
 // - m: Middleware function to be added.
 func (a *PuffApp) Use(m Middleware) {
-	a.RootRouter.Middlewares = append(a.RootRouter.Middlewares, &m)
+	a.rootRouter.Middlewares = append(a.rootRouter.Middlewares, &m)
 }
 
 // addOpenAPIRoutes adds routes to serve OpenAPI documentation for the PuffApp.
@@ -42,15 +42,9 @@ func (a *PuffApp) Use(m Middleware) {
 // This method will not add any routes if DocsURL is empty.
 //
 // Errors during spec generation are logged, and the method will exit early if any occur.
-func (a *PuffApp) addOpenAPIRoutes() {
-	if a.Config.DisableOpenAPIGeneration {
-		return
-	}
+func (a *PuffApp) createDocsRouter() *Router {
 	a.GenerateOpenAPISpec()
-	docsRouter := Router{
-		Prefix: a.Config.DocsURL,
-		Name:   "OpenAPI Documentation Router",
-	}
+	docsRouter := NewRouter("OpenAPI Documentation Router")
 
 	// Provides JSON OpenAPI Schema.
 	docsRouter.Get(".json", nil, func(c *Context) {
@@ -81,8 +75,7 @@ func (a *PuffApp) addOpenAPIRoutes() {
 		}
 		c.SendResponse(res)
 	})
-
-	a.IncludeRouter(&docsRouter)
+	return docsRouter
 }
 
 // attachMiddlewares recursively applies middlewares to all routes within a router.
@@ -111,11 +104,11 @@ func attachMiddlewares(middleware_combo *[]Middleware, router *Router) {
 // of the PuffApp. It also patches the routes of each router to ensure they have been
 // processed for middlewares.
 func (a *PuffApp) patchAllRoutes() {
-	a.RootRouter.patchRoutes()
-	for _, r := range a.RootRouter.Routers {
+	a.rootRouter.patchRoutes()
+	for _, r := range a.rootRouter.Routers {
 		r.patchRoutes()
 	}
-	attachMiddlewares(&[]Middleware{}, a.RootRouter)
+	attachMiddlewares(&[]Middleware{}, a.rootRouter)
 }
 
 // ListenAndServe starts the PuffApp server on the specified address.
@@ -128,17 +121,23 @@ func (a *PuffApp) patchAllRoutes() {
 // Parameters:
 // - listenAddr: The address the server will listen on (e.g., ":8080").
 func (a *PuffApp) ListenAndServe(listenAddr string) error {
-
 	a.patchAllRoutes()
-	a.addOpenAPIRoutes()
+
+	if !a.Config.DisableOpenAPIGeneration {
+		docsRouter := a.createDocsRouter()
+		a.Mount(a.Config.DocsURL, docsRouter)
+	}
 
 	slog.Debug(fmt.Sprintf("Running Puff 💨 on %s", listenAddr))
-	slog.Debug(fmt.Sprintf("Visit docs 💨 on %s", fmt.Sprintf("http://localhost%s%s", listenAddr, a.Config.DocsURL)))
+
+	if a.Config.VisualizeRoutesOnStartup {
+		a.Visualize()
+	}
 
 	if a.Server == nil {
 		a.Server = &http.Server{
 			Addr:    listenAddr,
-			Handler: a.RootRouter,
+			Handler: a,
 		}
 	}
 
@@ -159,7 +158,7 @@ func (a *PuffApp) ListenAndServe(listenAddr string) error {
 // - fields: Optional fields associated with the route.
 // - handleFunc: The handler function that will be executed when the route is accessed.
 func (a *PuffApp) Get(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Get(path, fields, handleFunc)
+	return a.rootRouter.Get(path, fields, handleFunc)
 }
 
 // Post registers an HTTP POST route in the PuffApp's root router.
@@ -169,7 +168,7 @@ func (a *PuffApp) Get(path string, fields any, handleFunc func(*Context)) *Route
 // - fields: Optional fields associated with the route.
 // - handleFunc: The handler function that will be executed when the route is accessed.
 func (a *PuffApp) Post(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Post(path, fields, handleFunc)
+	return a.rootRouter.Post(path, fields, handleFunc)
 }
 
 // Patch registers an HTTP PATCH route in the PuffApp's root router.
@@ -179,7 +178,7 @@ func (a *PuffApp) Post(path string, fields any, handleFunc func(*Context)) *Rout
 // - fields: Optional fields associated with the route.
 // - handleFunc: The handler function that will be executed when the route is accessed.
 func (a *PuffApp) Patch(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Patch(path, fields, handleFunc)
+	return a.rootRouter.Patch(path, fields, handleFunc)
 }
 
 // Put registers an HTTP PUT route in the PuffApp's root router.
@@ -189,7 +188,7 @@ func (a *PuffApp) Patch(path string, fields any, handleFunc func(*Context)) *Rou
 // - fields: Optional fields associated with the route.
 // - handleFunc: The handler function that will be executed when the route is accessed.
 func (a *PuffApp) Put(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Put(path, fields, handleFunc)
+	return a.rootRouter.Put(path, fields, handleFunc)
 }
 
 // Delete registers an HTTP DELETE route in the PuffApp's root router.
@@ -199,7 +198,7 @@ func (a *PuffApp) Put(path string, fields any, handleFunc func(*Context)) *Route
 // - fields: Optional fields associated with the route.
 // - handleFunc: The handler function that will be executed when the route is accessed.
 func (a *PuffApp) Delete(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.Delete(path, fields, handleFunc)
+	return a.rootRouter.Delete(path, fields, handleFunc)
 }
 
 // WebSocket registers a WebSocket route in the PuffApp's root router.
@@ -210,13 +209,13 @@ func (a *PuffApp) Delete(path string, fields any, handleFunc func(*Context)) *Ro
 // - fields: Optional fields associated with the route.
 // - handleFunc: The handler function to handle WebSocket connections.
 func (a *PuffApp) WebSocket(path string, fields any, handleFunc func(*Context)) *Route {
-	return a.RootRouter.WebSocket(path, fields, handleFunc)
+	return a.rootRouter.WebSocket(path, fields, handleFunc)
 }
 
 // AllRoutes returns all routes registered in the PuffApp, including those in sub-routers.
 // This function provides an aggregated view of all routes in the application.
 func (a *PuffApp) AllRoutes() []*Route {
-	return a.RootRouter.AllRoutes()
+	return a.rootRouter.AllRoutes()
 }
 
 // GenerateOpenAPISpec is responsible for taking the PuffApp configuration and turning it into an OpenAPI json.
@@ -234,11 +233,11 @@ func (a *PuffApp) GenerateOpenAPISpec() {
 func (a *PuffApp) GeneratePathsTags() (*Paths, *[]Tag) {
 	tags := []Tag{}
 	tagNames := []string{}
-	var paths = make(Paths)
-	for _, route := range a.RootRouter.Routes {
+	paths := make(Paths)
+	for _, route := range a.rootRouter.Routes {
 		addRoute(route, &tags, &tagNames, &paths)
 	}
-	for _, router := range a.RootRouter.Routers {
+	for _, router := range a.rootRouter.Routers {
 		for _, route := range router.Routes {
 			addRoute(route, &tags, &tagNames, &paths)
 		}
@@ -265,4 +264,12 @@ func (a *PuffApp) Shutdown(ctx context.Context) error {
 // Close calls close on the underlying server.
 func (a *PuffApp) Close() error {
 	return a.Server.Close()
+}
+
+func (a *PuffApp) Visualize() {
+	a.rootRouter.visualizeNode(a.rootRouter.rootNode, "", true)
+}
+
+func (a *PuffApp) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	a.rootRouter.ServeHTTP(w, req)
 }

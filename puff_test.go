@@ -44,15 +44,6 @@ func TestApp(t *testing.T) {
 	if app.Config.OpenAPI != nil {
 		t.Errorf("Expected OpenAPI to not be set.")
 	}
-	if app.RootRouter == nil {
-		t.Fatalf("Expected RootRouter to be initialized")
-	}
-	if app.RootRouter.Name != "Default" {
-		t.Errorf("Expected RootRouter name 'Default', got '%s'", app.RootRouter.Name)
-	}
-	if app.RootRouter.Tag != "Default" {
-		t.Errorf("Expected RootRouter tag 'Default', got '%s'", app.RootRouter.Tag)
-	}
 }
 
 func TestApp_DefaultVersion(t *testing.T) {
@@ -177,6 +168,8 @@ func randomdatagen() []byte {
 	return data
 }
 
-var oncepuffserver = sync.OnceFunc(testpuffserver)
-var oncenethttpserver = sync.OnceFunc(testnethttpserver)
-var randomdata = sync.OnceValue(randomdatagen)
+var (
+	oncepuffserver    = sync.OnceFunc(testpuffserver)
+	oncenethttpserver = sync.OnceFunc(testnethttpserver)
+	randomdata        = sync.OnceValue(randomdatagen)
+)
